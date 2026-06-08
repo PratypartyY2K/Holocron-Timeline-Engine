@@ -13,7 +13,10 @@ ALLOWED_RELATIONSHIP_NODE_TYPES: dict[RelationshipType, set[tuple[NodeType, Node
         (NodeType.EVENT, NodeType.CHARACTER),
         (NodeType.EVENT, NodeType.FACTION),
     },
-    RelationshipType.LOCATED_IN: {(NodeType.EVENT, NodeType.PLANET)},
+    RelationshipType.LOCATED_IN: {
+        (NodeType.EVENT, NodeType.PLANET),
+        (NodeType.CHARACTER, NodeType.PLANET),
+    },
     RelationshipType.MEMBER_OF: {(NodeType.CHARACTER, NodeType.FACTION)},
     RelationshipType.ALLIED_WITH: {(NodeType.FACTION, NodeType.FACTION)},
     RelationshipType.ENEMY_OF: {(NodeType.FACTION, NodeType.FACTION)},
@@ -58,4 +61,3 @@ class RelationshipService:
             note=command.note,
         )
         return self._graph_repository.create_relationship(relationship)
-

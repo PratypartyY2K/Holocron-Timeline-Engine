@@ -85,3 +85,24 @@ def test_create_event_causal_relationship_keeps_direction() -> None:
     assert relationship.from_node_id == "event-1"
     assert relationship.to_node_id == "event-2"
 
+
+def test_create_character_located_in_planet_relationship_is_allowed() -> None:
+    repository = FakeGraphRepository(
+        nodes=[
+            make_node("char-1", NodeType.CHARACTER),
+            make_node("planet-1", NodeType.PLANET),
+        ]
+    )
+    service = RelationshipService(repository)
+
+    relationship = service.create_relationship(
+        CreateRelationshipCommand(
+            type=RelationshipType.LOCATED_IN,
+            from_node_id="char-1",
+            to_node_id="planet-1",
+            note="Homeworld",
+        )
+    )
+
+    assert relationship.from_node_id == "char-1"
+    assert relationship.to_node_id == "planet-1"
