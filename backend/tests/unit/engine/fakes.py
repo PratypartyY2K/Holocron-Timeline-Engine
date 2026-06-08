@@ -1,10 +1,16 @@
+from app.domain.entities.character import Character
 from app.domain.entities.causal_graph import CausalGraph
 from app.domain.entities.event import Event
+from app.domain.entities.faction import Faction
 from app.domain.entities.node_reference import NodeReference
+from app.domain.entities.planet import Planet
 from app.domain.entities.relationship import Relationship
 from app.domain.enums import NodeType
+from app.repositories.interfaces.character_repository import CharacterRepository
 from app.repositories.interfaces.event_repository import EventRepository
+from app.repositories.interfaces.faction_repository import FactionRepository
 from app.repositories.interfaces.graph_repository import GraphRepository
+from app.repositories.interfaces.planet_repository import PlanetRepository
 
 
 class FakeEventRepository(EventRepository):
@@ -62,6 +68,42 @@ class FakeEventRepository(EventRepository):
             (event_id, depth),
             CausalGraph(focus_event_id=event_id, depth=depth),
         )
+
+
+class FakeCharacterRepository(CharacterRepository):
+    def __init__(self) -> None:
+        self.characters_by_slug: dict[str, Character] = {}
+
+    def create(self, character: Character) -> Character:
+        self.characters_by_slug[character.slug] = character
+        return character
+
+    def get_by_slug(self, slug: str) -> Character | None:
+        return self.characters_by_slug.get(slug)
+
+
+class FakePlanetRepository(PlanetRepository):
+    def __init__(self) -> None:
+        self.planets_by_slug: dict[str, Planet] = {}
+
+    def create(self, planet: Planet) -> Planet:
+        self.planets_by_slug[planet.slug] = planet
+        return planet
+
+    def get_by_slug(self, slug: str) -> Planet | None:
+        return self.planets_by_slug.get(slug)
+
+
+class FakeFactionRepository(FactionRepository):
+    def __init__(self) -> None:
+        self.factions_by_slug: dict[str, Faction] = {}
+
+    def create(self, faction: Faction) -> Faction:
+        self.factions_by_slug[faction.slug] = faction
+        return faction
+
+    def get_by_slug(self, slug: str) -> Faction | None:
+        return self.factions_by_slug.get(slug)
 
 
 class FakeGraphRepository(GraphRepository):

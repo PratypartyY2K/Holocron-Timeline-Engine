@@ -16,6 +16,30 @@ class CreateEventCommand:
 
 
 @dataclass(slots=True, frozen=True)
+class CreateCharacterCommand:
+    slug: str
+    name: str
+    description: str | None
+    species: str | None
+    homeworld_name: str | None
+
+
+@dataclass(slots=True, frozen=True)
+class CreatePlanetCommand:
+    slug: str
+    name: str
+    description: str | None
+    region: str | None
+
+
+@dataclass(slots=True, frozen=True)
+class CreateFactionCommand:
+    slug: str
+    name: str
+    description: str | None
+
+
+@dataclass(slots=True, frozen=True)
 class CreateRelationshipCommand:
     type: RelationshipType
     from_node_id: str
@@ -30,4 +54,3 @@ class ListEventsQuery:
     limit: int = 50
     offset: int = 0
     order: str = "asc"
-
