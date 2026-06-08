@@ -1,0 +1,87 @@
+import pytest
+
+from app.domain.enums import NodeType, RelationshipType
+from app.domain.errors import EntityNotFoundError, UnsupportedRelationshipError
+from app.engine.dto import CreateRelationshipCommand
+from app.engine.services.relationship_service import RelationshipService
+from tests.unit.engine.fakes import FakeGraphRepository, make_node
+
+
+def test_create_faction_relationship_canonicalizes_edge_order() -> None:
+    repository = FakeGraphRepository(
+        nodes=[
+            make_node("zzz-faction", NodeType.FACTION),
+            make_node("aaa-faction", NodeType.FACTION),
+        ]
+    )
+    service = RelationshipService(repository)
+
+    relationship = service.create_relationship(
+        CreateRelationshipCommand(
+            type=RelationshipType.ALLIED_WITH,
+            from_node_id="zzz-faction",
+            to_node_id="aaa-faction",
+            note="Temporary alliance",
+        )
+    )
+
+    assert relationship.from_node_id == "aaa-faction"
+    assert relationship.to_node_id == "zzz-faction"
+
+
+def test_create_relationship_rejects_unknown_node() -> None:
+    repository = FakeGraphRepository(nodes=[make_node("event-1", NodeType.EVENT)])
+    service = RelationshipService(repository)
+
+    with pytest.raises(EntityNotFoundError):
+        service.create_relationship(
+            CreateRelationshipCommand(
+                type=RelationshipType.CAUSES,
+                from_node_id="event-1",
+                to_node_id="missing",
+                note=None,
+            )
+        )
+
+
+def test_create_relationship_rejects_unsupported_pairing() -> None:
+    repository = FakeGraphRepository(
+        nodes=[
+            make_node("event-1", NodeType.EVENT),
+            make_node("planet-1", NodeType.PLANET),
+        ]
+    )
+    service = RelationshipService(repository)
+
+    with pytest.raises(UnsupportedRelationshipError):
+        service.create_relationship(
+            CreateRelationshipCommand(
+                type=RelationshipType.CAUSES,
+                from_node_id="event-1",
+                to_node_id="planet-1",
+                note=None,
+            )
+        )
+
+
+def test_create_event_causal_relationship_keeps_direction() -> None:
+    repository = FakeGraphRepository(
+        nodes=[
+            make_node("event-1", NodeType.EVENT),
+            make_node("event-2", NodeType.EVENT),
+        ]
+    )
+    service = RelationshipService(repository)
+
+    relationship = service.create_relationship(
+        CreateRelationshipCommand(
+            type=RelationshipType.CAUSES,
+            from_node_id="event-1",
+            to_node_id="event-2",
+            note="Direct cause",
+        )
+    )
+
+    assert relationship.from_node_id == "event-1"
+    assert relationship.to_node_id == "event-2"
+
