@@ -18,6 +18,7 @@ Frontend:
 - slug-based entity detail pages at `/characters/{slug}`, `/planets/{slug}`, and `/factions/{slug}`
 - dependency and consequence panels with depth controls
 - React Flow causal graph with node click navigation
+- browser-side data fetching for timeline, entity, and event detail API calls
 
 Backend:
 
@@ -83,6 +84,18 @@ Key endpoints:
 - backend: `http://localhost:8000`
 - API docs: `http://localhost:8000/docs`
 - Neo4j browser: `http://localhost:7474`
+
+### Browser API Behavior
+
+The frontend now issues its data requests from the browser for the main archive, entity
+listing pages, entity detail pages, and event detail pages. In browser DevTools, these
+requests should appear as `fetch`/XHR calls to `http://localhost:8000/api/v1/...` rather
+than only as top-level document navigations.
+
+When `NEXT_PUBLIC_API_BASE_URL` is unset in the browser, the frontend defaults to
+`http://localhost:8000`. In Docker Compose, server-side rendering can still use the
+internal service hostname `http://backend:8000`, but browser-visible API traffic is
+normalized to `localhost` so the requests resolve correctly from the user agent.
 
 ### Seed Neo4j Schema
 
