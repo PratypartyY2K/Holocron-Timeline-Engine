@@ -2,7 +2,7 @@ from uuid import uuid4
 
 from app.domain.entities.relationship import Relationship
 from app.domain.enums import NodeType, RelationshipType
-from app.domain.errors import EntityNotFoundError, UnsupportedRelationshipError
+from app.domain.errors import DuplicateEntityError, EntityNotFoundError, UnsupportedRelationshipError, ValidationError
 from app.engine.dto import CreateRelationshipCommand
 from app.repositories.interfaces.graph_repository import GraphRepository
 
@@ -48,10 +48,23 @@ class RelationshipService:
                 f"Relationship {command.type} is not valid for {from_node.node_type} -> {to_node.node_type}"
             )
 
+        if command.from_node_id == command.to_node_id:
+            raise ValidationError("self-referential relationships are not allowed")
+
         source_id = command.from_node_id
         target_id = command.to_node_id
         if command.type in CANONICAL_EDGE_TYPES and target_id < source_id:
             source_id, target_id = target_id, source_id
+
+        existing_relationship = self._graph_repository.get_relationship(
+            relationship_type=command.type.value,
+            from_node_id=source_id,
+            to_node_id=target_id,
+        )
+        if existing_relationship is not None:
+            raise DuplicateEntityError(
+                f"Relationship already exists: {command.type} {source_id} -> {target_id}"
+            )
 
         relationship = Relationship(
             id=str(uuid4()),

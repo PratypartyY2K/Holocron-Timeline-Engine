@@ -25,20 +25,36 @@ class Neo4jGraphRepository(GraphRepository):
             return None
         return map_node_reference({"id": record["id"], "labels": list(record["labels"])})
 
+    def get_relationship(
+        self,
+        *,
+        relationship_type: str,
+        from_node_id: str,
+        to_node_id: str,
+    ) -> Relationship | None:
+        query = f"""
+        MATCH (source {{id: $from_node_id}})-[r:{relationship_type} {{from_node_id: $from_node_id, to_node_id: $to_node_id}}]->(target {{id: $to_node_id}})
+        RETURN properties(r) AS relationship
+        """
+        with self._driver.session(database=self._database) as session:
+            record = session.run(query, from_node_id=from_node_id, to_node_id=to_node_id).single()
+        if record is None:
+            return None
+        return map_relationship_record(dict(record["relationship"]))
+
     def create_relationship(self, relationship: Relationship) -> Relationship:
         query = f"""
         MATCH (source {{id: $from_node_id}})
         MATCH (target {{id: $to_node_id}})
-        MERGE (source)-[r:{relationship.type.value} {{from_node_id: $from_node_id, to_node_id: $to_node_id}}]->(target)
-        ON CREATE SET
-            r.id = $id,
-            r.type = $type,
-            r.note = $note,
-            r.created_at = datetime($created_at),
-            r.updated_at = datetime($updated_at)
-        ON MATCH SET
-            r.note = $note,
-            r.updated_at = datetime($updated_at)
+        CREATE (source)-[r:{relationship.type.value} {{
+            id: $id,
+            type: $type,
+            from_node_id: $from_node_id,
+            to_node_id: $to_node_id,
+            note: $note,
+            created_at: datetime($created_at),
+            updated_at: datetime($updated_at)
+        }}]->(target)
         RETURN properties(r) AS relationship
         """
         with self._driver.session(database=self._database) as session:
@@ -60,4 +76,3 @@ class Neo4jGraphRepository(GraphRepository):
         if record is None:
             raise RuntimeError("Failed to create relationship")
         return dict(record["relationship"])
-

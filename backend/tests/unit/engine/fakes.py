@@ -129,6 +129,22 @@ class FakeGraphRepository(GraphRepository):
     def get_node_reference(self, node_id: str) -> NodeReference | None:
         return self.nodes_by_id.get(node_id)
 
+    def get_relationship(
+        self,
+        *,
+        relationship_type: str,
+        from_node_id: str,
+        to_node_id: str,
+    ) -> Relationship | None:
+        for relationship in self.relationships:
+            if (
+                relationship.type.value == relationship_type
+                and relationship.from_node_id == from_node_id
+                and relationship.to_node_id == to_node_id
+            ):
+                return relationship
+        return None
+
     def create_relationship(self, relationship: Relationship) -> Relationship:
         self.relationships.append(relationship)
         return relationship

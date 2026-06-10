@@ -10,6 +10,15 @@ class GraphRepository(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def create_relationship(self, relationship: Relationship) -> Relationship:
+    def get_relationship(
+        self,
+        *,
+        relationship_type: str,
+        from_node_id: str,
+        to_node_id: str,
+    ) -> Relationship | None:
         raise NotImplementedError
 
+    @abstractmethod
+    def create_relationship(self, relationship: Relationship) -> Relationship:
+        raise NotImplementedError
