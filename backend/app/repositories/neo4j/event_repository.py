@@ -77,7 +77,7 @@ class Neo4jEventRepository(EventRepository):
         LIMIT $limit
         RETURN collect(properties(e)) AS events
         """
-        count_query = """
+        count_query = f"""
         MATCH (e:Event)
         WHERE ($start_year IS NULL OR e.start_year >= $start_year)
           AND ($end_year IS NULL OR coalesce(e.end_year, e.start_year) <= $end_year)

@@ -11,3 +11,7 @@ class FactionRepository(ABC):
     @abstractmethod
     def get_by_slug(self, slug: str) -> Faction | None:
         raise NotImplementedError
+
+    @abstractmethod
+    def list_factions(self) -> list[Faction]:
+        raise NotImplementedError

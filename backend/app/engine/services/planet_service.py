@@ -1,7 +1,7 @@
 from uuid import uuid4
 
 from app.domain.entities.planet import Planet
-from app.domain.errors import DuplicateEntityError, ValidationError
+from app.domain.errors import DuplicateEntityError, EntityNotFoundError, ValidationError
 from app.engine.dto import CreatePlanetCommand
 from app.repositories.interfaces.planet_repository import PlanetRepository
 
@@ -26,3 +26,12 @@ class PlanetService:
             region=command.region,
         )
         return self._planet_repository.create(planet)
+
+    def get_planet_by_slug(self, slug: str) -> Planet:
+        planet = self._planet_repository.get_by_slug(slug)
+        if planet is None:
+            raise EntityNotFoundError(f"Planet not found for slug: {slug}")
+        return planet
+
+    def list_planets(self) -> list[Planet]:
+        return self._planet_repository.list_planets()

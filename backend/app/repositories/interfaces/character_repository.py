@@ -11,3 +11,7 @@ class CharacterRepository(ABC):
     @abstractmethod
     def get_by_slug(self, slug: str) -> Character | None:
         raise NotImplementedError
+
+    @abstractmethod
+    def list_characters(self) -> list[Character]:
+        raise NotImplementedError

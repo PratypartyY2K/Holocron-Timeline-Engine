@@ -12,6 +12,36 @@ export type EventRecord = {
   updated_at: string;
 };
 
+export type CharacterRecord = {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  species: string | null;
+  homeworld_name: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PlanetRecord = {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  region: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type FactionRecord = {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type EventListResponse = {
   items: EventRecord[];
   total: number;
@@ -52,6 +82,29 @@ const DEFAULT_API_BASE_URL = "http://backend:8000";
 
 function getApiBaseUrl(): string {
   return process.env.NEXT_PUBLIC_API_BASE_URL ?? DEFAULT_API_BASE_URL;
+}
+
+async function getOptionalEntityList<T>(path: string, label: string): Promise<T[]> {
+  try {
+    const response = await fetch(`${getApiBaseUrl()}${path}`, {
+      cache: "no-store",
+    });
+
+    if (response.ok) {
+      return (await response.json()) as T[];
+    }
+
+    if (response.status === 404 || response.status === 405) {
+      return [];
+    }
+
+    throw new Error(`Failed to fetch ${label}: ${response.status}`);
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith(`Failed to fetch ${label}:`)) {
+      throw error;
+    }
+    return [];
+  }
 }
 
 export function formatChronology(year: number): string {
@@ -137,6 +190,54 @@ export async function getEventBySlug(slug: string): Promise<EventRecord> {
   }
 
   return (await response.json()) as EventRecord;
+}
+
+export async function getCharacters(): Promise<CharacterRecord[]> {
+  return getOptionalEntityList<CharacterRecord>("/api/v1/characters", "characters");
+}
+
+export async function getCharacterBySlug(slug: string): Promise<CharacterRecord> {
+  const response = await fetch(`${getApiBaseUrl()}/api/v1/characters/by-slug/${slug}`, {
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch character ${slug}: ${response.status}`);
+  }
+
+  return (await response.json()) as CharacterRecord;
+}
+
+export async function getPlanets(): Promise<PlanetRecord[]> {
+  return getOptionalEntityList<PlanetRecord>("/api/v1/planets", "planets");
+}
+
+export async function getPlanetBySlug(slug: string): Promise<PlanetRecord> {
+  const response = await fetch(`${getApiBaseUrl()}/api/v1/planets/by-slug/${slug}`, {
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch planet ${slug}: ${response.status}`);
+  }
+
+  return (await response.json()) as PlanetRecord;
+}
+
+export async function getFactions(): Promise<FactionRecord[]> {
+  return getOptionalEntityList<FactionRecord>("/api/v1/factions", "factions");
+}
+
+export async function getFactionBySlug(slug: string): Promise<FactionRecord> {
+  const response = await fetch(`${getApiBaseUrl()}/api/v1/factions/by-slug/${slug}`, {
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch faction ${slug}: ${response.status}`);
+  }
+
+  return (await response.json()) as FactionRecord;
 }
 
 export async function getEventDependencies(

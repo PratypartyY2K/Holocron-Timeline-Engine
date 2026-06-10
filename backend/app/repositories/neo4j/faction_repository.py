@@ -40,6 +40,16 @@ class Neo4jFactionRepository(FactionRepository):
             return None
         return map_faction_record(dict(record["faction"]))
 
+    def list_factions(self) -> list[Faction]:
+        query = """
+        MATCH (f:Faction)
+        RETURN properties(f) AS faction
+        ORDER BY f.name ASC
+        """
+        with self._driver.session(database=self._database) as session:
+            result = session.run(query)
+            return [map_faction_record(dict(record["faction"])) for record in result]
+
     @staticmethod
     def _create_tx(tx: Any, query: str, faction: Faction) -> dict[str, Any]:
         record = tx.run(

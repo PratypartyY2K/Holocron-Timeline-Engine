@@ -23,3 +23,18 @@ def create_character(
         )
     )
     return CharacterResponse.model_validate(character)
+
+
+@router.get("", response_model=list[CharacterResponse])
+def list_characters(
+    service: CharacterService = Depends(get_character_service),
+) -> list[CharacterResponse]:
+    return [CharacterResponse.model_validate(character) for character in service.list_characters()]
+
+
+@router.get("/by-slug/{slug}", response_model=CharacterResponse)
+def get_character_by_slug(
+    slug: str,
+    service: CharacterService = Depends(get_character_service),
+) -> CharacterResponse:
+    return CharacterResponse.model_validate(service.get_character_by_slug(slug))

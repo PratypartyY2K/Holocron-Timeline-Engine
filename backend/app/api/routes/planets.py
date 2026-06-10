@@ -22,3 +22,18 @@ def create_planet(
         )
     )
     return PlanetResponse.model_validate(planet)
+
+
+@router.get("", response_model=list[PlanetResponse])
+def list_planets(
+    service: PlanetService = Depends(get_planet_service),
+) -> list[PlanetResponse]:
+    return [PlanetResponse.model_validate(planet) for planet in service.list_planets()]
+
+
+@router.get("/by-slug/{slug}", response_model=PlanetResponse)
+def get_planet_by_slug(
+    slug: str,
+    service: PlanetService = Depends(get_planet_service),
+) -> PlanetResponse:
+    return PlanetResponse.model_validate(service.get_planet_by_slug(slug))

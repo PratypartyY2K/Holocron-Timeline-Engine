@@ -87,6 +87,9 @@ class FakeCharacterRepository(CharacterRepository):
     def get_by_slug(self, slug: str) -> Character | None:
         return self.characters_by_slug.get(slug)
 
+    def list_characters(self) -> list[Character]:
+        return sorted(self.characters_by_slug.values(), key=lambda character: character.name)
+
 
 class FakePlanetRepository(PlanetRepository):
     def __init__(self) -> None:
@@ -99,6 +102,9 @@ class FakePlanetRepository(PlanetRepository):
     def get_by_slug(self, slug: str) -> Planet | None:
         return self.planets_by_slug.get(slug)
 
+    def list_planets(self) -> list[Planet]:
+        return sorted(self.planets_by_slug.values(), key=lambda planet: planet.name)
+
 
 class FakeFactionRepository(FactionRepository):
     def __init__(self) -> None:
@@ -110,6 +116,9 @@ class FakeFactionRepository(FactionRepository):
 
     def get_by_slug(self, slug: str) -> Faction | None:
         return self.factions_by_slug.get(slug)
+
+    def list_factions(self) -> list[Faction]:
+        return sorted(self.factions_by_slug.values(), key=lambda faction: faction.name)
 
 
 class FakeGraphRepository(GraphRepository):

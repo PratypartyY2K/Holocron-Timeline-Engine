@@ -1,7 +1,7 @@
 from uuid import uuid4
 
 from app.domain.entities.character import Character
-from app.domain.errors import DuplicateEntityError, ValidationError
+from app.domain.errors import DuplicateEntityError, EntityNotFoundError, ValidationError
 from app.engine.dto import CreateCharacterCommand
 from app.repositories.interfaces.character_repository import CharacterRepository
 
@@ -27,3 +27,12 @@ class CharacterService:
             homeworld_name=command.homeworld_name,
         )
         return self._character_repository.create(character)
+
+    def get_character_by_slug(self, slug: str) -> Character:
+        character = self._character_repository.get_by_slug(slug)
+        if character is None:
+            raise EntityNotFoundError(f"Character not found for slug: {slug}")
+        return character
+
+    def list_characters(self) -> list[Character]:
+        return self._character_repository.list_characters()

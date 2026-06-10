@@ -41,6 +41,16 @@ class Neo4jPlanetRepository(PlanetRepository):
             return None
         return map_planet_record(dict(record["planet"]))
 
+    def list_planets(self) -> list[Planet]:
+        query = """
+        MATCH (p:Planet)
+        RETURN properties(p) AS planet
+        ORDER BY p.name ASC
+        """
+        with self._driver.session(database=self._database) as session:
+            result = session.run(query)
+            return [map_planet_record(dict(record["planet"])) for record in result]
+
     @staticmethod
     def _create_tx(tx: Any, query: str, planet: Planet) -> dict[str, Any]:
         record = tx.run(

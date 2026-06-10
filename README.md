@@ -12,14 +12,17 @@ Holocron Timeline Engine is an interactive Star Wars knowledge graph and timelin
 Frontend:
 
 - `/events` timeline explorer
-- timeline filters for chronology, order, and era
+- `/characters`, `/planets`, and `/factions` entity browsers
+- timeline filters for chronology, order, era, character, and location
 - slug-based event detail pages at `/events/{slug}`
+- slug-based entity detail pages at `/characters/{slug}`, `/planets/{slug}`, and `/factions/{slug}`
 - dependency and consequence panels with depth controls
 - React Flow causal graph with node click navigation
 
 Backend:
 
 - event creation and retrieval
+- character, planet, and faction creation and retrieval
 - relationship creation
 - dependency and consequence traversal
 - causal graph endpoint for event-focused graph rendering
@@ -40,10 +43,28 @@ scripts/   development and seed scripts
 - `GET /api/v1/events`
 - `GET /api/v1/events/{event_id}`
 - `GET /api/v1/events/by-slug/{slug}`
+- `GET /api/v1/characters`
+- `GET /api/v1/characters/by-slug/{slug}`
+- `GET /api/v1/planets`
+- `GET /api/v1/planets/by-slug/{slug}`
+- `GET /api/v1/factions`
+- `GET /api/v1/factions/by-slug/{slug}`
 - `POST /api/v1/graph/relationships`
 - `GET /api/v1/events/{event_id}/dependencies?depth=N`
 - `GET /api/v1/events/{event_id}/consequences?depth=N`
 - `GET /api/v1/events/{event_id}/causal-graph?depth=N`
+
+`GET /api/v1/events` now supports combined filters such as:
+
+- `era`
+- `character`
+- `location`
+- `start_year`
+- `end_year`
+- `order`
+- `limit`
+- `offset`
+- `causal_depth`
 
 ## Local Development
 
@@ -52,6 +73,9 @@ Use Docker Compose for the full stack:
 ```bash
 docker compose -f docker/compose.yml up --build
 ```
+
+The backend container runs `uvicorn --reload` in local Compose, so route and service changes
+should be picked up automatically after file edits.
 
 Key endpoints:
 
@@ -73,6 +97,9 @@ scripts/seed/init_schema.cypher
 - timeline: `http://localhost:3000/events`
 - detail page example: `http://localhost:3000/events/battle-of-yavin`
 - filtered timeline example: `http://localhost:3000/events?era=Age%20of%20Rebellion&order=asc`
+- character-filtered timeline example: `http://localhost:3000/?character=wilhuff-tarkin`
+- location-filtered timeline example: `http://localhost:3000/?location=tatooine`
+- entity browser examples: `http://localhost:3000/characters`, `http://localhost:3000/planets`, `http://localhost:3000/factions`
 - depth example: `http://localhost:3000/events/battle-of-yavin?depth=2`
 
 ## Local Installation

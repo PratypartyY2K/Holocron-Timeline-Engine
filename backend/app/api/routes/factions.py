@@ -21,3 +21,18 @@ def create_faction(
         )
     )
     return FactionResponse.model_validate(faction)
+
+
+@router.get("", response_model=list[FactionResponse])
+def list_factions(
+    service: FactionService = Depends(get_faction_service),
+) -> list[FactionResponse]:
+    return [FactionResponse.model_validate(faction) for faction in service.list_factions()]
+
+
+@router.get("/by-slug/{slug}", response_model=FactionResponse)
+def get_faction_by_slug(
+    slug: str,
+    service: FactionService = Depends(get_faction_service),
+) -> FactionResponse:
+    return FactionResponse.model_validate(service.get_faction_by_slug(slug))

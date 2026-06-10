@@ -11,3 +11,7 @@ class PlanetRepository(ABC):
     @abstractmethod
     def get_by_slug(self, slug: str) -> Planet | None:
         raise NotImplementedError
+
+    @abstractmethod
+    def list_planets(self) -> list[Planet]:
+        raise NotImplementedError

@@ -42,6 +42,16 @@ class Neo4jCharacterRepository(CharacterRepository):
             return None
         return map_character_record(dict(record["character"]))
 
+    def list_characters(self) -> list[Character]:
+        query = """
+        MATCH (c:Character)
+        RETURN properties(c) AS character
+        ORDER BY c.name ASC
+        """
+        with self._driver.session(database=self._database) as session:
+            result = session.run(query)
+            return [map_character_record(dict(record["character"])) for record in result]
+
     @staticmethod
     def _create_tx(tx: Any, query: str, character: Character) -> dict[str, Any]:
         record = tx.run(

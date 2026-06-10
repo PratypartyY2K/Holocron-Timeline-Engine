@@ -1,15 +1,20 @@
 import type { Route } from "next";
 import Link from "next/link";
 import {
+  CharacterRecord,
+  FactionRecord,
+  PlanetRecord,
   formatChronology,
   formatEventRange,
-  EventRecord,
   getBackendStatus,
+  getCharacters,
+  getFactions,
+  getPlanets,
   getTimelineEvents,
 } from "../lib/holocron-api";
 
-function buildEraSummary(events: Awaited<ReturnType<typeof getTimelineEvents>>["items"]): string {
-  const eraSet = new Set(events.map((event) => event.era).filter((era): era is string => Boolean(era)));
+function buildEraSummary(eras: Array<string | null>): string {
+  const eraSet = new Set(eras.filter((era): era is string => Boolean(era)));
   return `${eraSet.size} eras mapped`;
 }
 
@@ -29,18 +34,63 @@ function parseOrder(value: string | string[] | undefined): "asc" | "desc" {
   return value === "desc" ? "desc" : "asc";
 }
 
-function parseEra(value: string | string[] | undefined): string | undefined {
+function parseText(value: string | string[] | undefined): string | undefined {
   if (typeof value !== "string" || value.trim() === "") {
     return undefined;
   }
   return value;
 }
 
-function filterByEra(events: EventRecord[], era: string | undefined): EventRecord[] {
-  if (era === undefined) {
-    return events;
+function entityMetaLabel(entity: CharacterRecord | PlanetRecord | FactionRecord): string {
+  if ("species" in entity) {
+    return entity.species ?? entity.homeworld_name ?? "Character profile";
   }
-  return events.filter((event) => event.era === era);
+  if ("region" in entity) {
+    return entity.region ?? "Planet record";
+  }
+  return "Faction record";
+}
+
+function renderEntityPreview(
+  title: string,
+  kicker: string,
+  href: Route,
+  items: Array<CharacterRecord | PlanetRecord | FactionRecord>,
+) {
+  return (
+    <section className="timeline-shell entity-shell">
+      <header className="timeline-header entity-header">
+        <div>
+          <p className="section-kicker">{kicker}</p>
+          <h2>{title}</h2>
+        </div>
+        <p className="timeline-caption">
+          Structured node profiles synced from the graph backend.
+        </p>
+      </header>
+      <div className="entity-grid">
+        {items.map((item) => (
+          <Link
+            key={item.id}
+            href={`${href}/${item.slug}` as Route}
+            className="entity-card"
+          >
+            <div className="entity-card-meta">
+              <span>{entityMetaLabel(item)}</span>
+              <span>/{item.slug}</span>
+            </div>
+            <h3>{item.name}</h3>
+            <p>{item.description ?? "No description available."}</p>
+          </Link>
+        ))}
+      </div>
+      <div className="entity-footer">
+        <Link href={href} className="secondary-link">
+          Browse all
+        </Link>
+      </div>
+    </section>
+  );
 }
 
 export default async function HomePage({ searchParams }: HomePageProps) {
@@ -48,23 +98,31 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const startYear = parseInteger(resolvedSearchParams.start_year);
   const endYear = parseInteger(resolvedSearchParams.end_year);
   const order = parseOrder(resolvedSearchParams.order);
-  const era = parseEra(resolvedSearchParams.era);
+  const era = parseText(resolvedSearchParams.era);
+  const character = parseText(resolvedSearchParams.character);
+  const location = parseText(resolvedSearchParams.location);
 
-  const [backendStatus, timeline] = await Promise.all([
+  const [backendStatus, timeline, characters, planets, factions] = await Promise.all([
     getBackendStatus(),
     getTimelineEvents({
       startYear,
       endYear,
+      era,
+      character,
+      location,
       order,
       limit: 200,
     }),
+    getCharacters(),
+    getPlanets(),
+    getFactions(),
   ]);
-  const filteredItems = filterByEra(timeline.items, era);
+
   const knownEras = Array.from(
     new Set(timeline.items.map((event) => event.era).filter((item): item is string => Boolean(item))),
   ).sort((left, right) => left.localeCompare(right));
-  const firstEvent = filteredItems.at(0);
-  const lastEvent = filteredItems.at(-1);
+  const firstEvent = timeline.items.at(0);
+  const lastEvent = timeline.items.at(-1);
   const rangeLabel =
     firstEvent && lastEvent
       ? `${formatChronology(firstEvent.start_year)} to ${formatChronology(lastEvent.start_year)}`
@@ -75,11 +133,25 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       <section className="hero hero-wide">
         <div className="hero-copy">
           <p className="eyebrow">Holocron Timeline Engine</p>
-          <h1>Galaxy history, arranged as a living chronology.</h1>
+          <h1>Galaxy history, characters, worlds, and factions in one archive.</h1>
           <p className="lede">
-            A timeline-first view of Star Wars canon, backed by FastAPI and Neo4j and ready
-            for graph exploration.
+            A timeline-first Star Wars explorer with event chronology, graph-aware filters,
+            and browsable entity records for the major actors in the canon.
           </p>
+          <nav className="hero-nav" aria-label="Primary">
+            <Link href={"/events" as Route} className="secondary-link">
+              Events
+            </Link>
+            <Link href={"/characters" as Route} className="secondary-link">
+              Characters
+            </Link>
+            <Link href={"/planets" as Route} className="secondary-link">
+              Planets
+            </Link>
+            <Link href={"/factions" as Route} className="secondary-link">
+              Factions
+            </Link>
+          </nav>
         </div>
 
         <div className="hero-stats">
@@ -92,12 +164,12 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             <strong>{rangeLabel}</strong>
           </div>
           <div className="stat-card">
-            <span className="stat-label">Archive size</span>
-            <strong>{filteredItems.length} events</strong>
+            <span className="stat-label">Entity coverage</span>
+            <strong>{characters.length + planets.length + factions.length} graph nodes</strong>
           </div>
           <div className="stat-card">
             <span className="stat-label">Coverage</span>
-            <strong>{buildEraSummary(filteredItems)}</strong>
+            <strong>{buildEraSummary(timeline.items.map((event) => event.era))}</strong>
           </div>
         </div>
       </section>
@@ -109,12 +181,12 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             <h2>Mapped events</h2>
           </div>
           <p className="timeline-caption">
-            Server-rendered from <code>/api/v1/events</code>. Signed backend chronology is
-            formatted here as BBY and ABY.
+            Server-rendered from <code>/api/v1/events</code>. Filters now span time, era,
+            character involvement, and location.
           </p>
         </header>
 
-        <form className="filter-bar" method="get">
+        <form className="filter-bar filter-bar-wide" method="get">
           <label className="filter-field">
             <span>Start year</span>
             <input type="number" name="start_year" defaultValue={startYear} placeholder="-232" />
@@ -141,18 +213,40 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               ))}
             </select>
           </label>
+          <label className="filter-field">
+            <span>Character</span>
+            <select name="character" defaultValue={character ?? ""}>
+              <option value="">Any character</option>
+              {characters.map((item) => (
+                <option key={item.id} value={item.slug}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="filter-field">
+            <span>Location</span>
+            <select name="location" defaultValue={location ?? ""}>
+              <option value="">Any planet</option>
+              {planets.map((item) => (
+                <option key={item.id} value={item.slug}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </label>
           <div className="filter-actions">
             <button type="submit" className="action-button">
               Apply filters
             </button>
-            <Link href={"/events" as Route} className="secondary-link">
+            <Link href={"/" as Route} className="secondary-link">
               Reset
             </Link>
           </div>
         </form>
 
         <div className="timeline-list">
-          {filteredItems.map((event) => (
+          {timeline.items.map((event) => (
             <article key={event.id} className="timeline-card">
               <div className="timeline-marker" aria-hidden="true" />
               <Link
@@ -176,6 +270,10 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           ))}
         </div>
       </section>
+
+      {renderEntityPreview("Key characters", "Personae", "/characters", characters.slice(0, 3))}
+      {renderEntityPreview("Known worlds", "Atlas", "/planets", planets.slice(0, 3))}
+      {renderEntityPreview("Power blocs", "Factions", "/factions", factions.slice(0, 3))}
     </main>
   );
 }
