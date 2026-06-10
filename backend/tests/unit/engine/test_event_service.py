@@ -89,6 +89,47 @@ def test_list_events_validates_query() -> None:
         service.list_events(ListEventsQuery(limit=0))
 
 
+def test_list_events_validates_causal_depth() -> None:
+    service = EventService(FakeEventRepository())
+
+    with pytest.raises(ValidationError):
+        service.list_events(ListEventsQuery(causal_depth=0))
+
+
+def test_list_events_supports_combined_filters() -> None:
+    repository = FakeEventRepository()
+    repository.create(
+        Event(
+            id="event-1",
+            slug="battle-of-yavin",
+            title="Battle of Yavin",
+            description=None,
+            start_year=0,
+            end_year=0,
+            era="Age of Rebellion",
+            canon_status=None,
+        )
+    )
+    repository.create(
+        Event(
+            id="event-2",
+            slug="fall-of-the-empire",
+            title="Fall of the Empire",
+            description=None,
+            start_year=4,
+            end_year=4,
+            era="New Republic",
+            canon_status=None,
+        )
+    )
+    service = EventService(repository)
+
+    events, total = service.list_events(ListEventsQuery(era="Age of Rebellion"))
+
+    assert total == 1
+    assert [event.id for event in events] == ["event-1"]
+
+
 def test_list_dependencies_requires_existing_event() -> None:
     service = EventService(FakeEventRepository())
 

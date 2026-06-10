@@ -48,6 +48,10 @@ def get_event_by_slug(
 def list_events(
     start_year: int | None = Query(default=None),
     end_year: int | None = Query(default=None),
+    era: str | None = Query(default=None),
+    character: str | None = Query(default=None),
+    location: str | None = Query(default=None),
+    causal_depth: int | None = Query(default=None, ge=1, le=8),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     order: str = Query(default="asc", pattern="^(asc|desc)$"),
@@ -57,6 +61,10 @@ def list_events(
         ListEventsQuery(
             start_year=start_year,
             end_year=end_year,
+            era=era,
+            character=character,
+            location=location,
+            causal_depth=causal_depth,
             limit=limit,
             offset=offset,
             order=order,

@@ -51,6 +51,10 @@ class CreateRelationshipCommand:
 class ListEventsQuery:
     start_year: int | None = None
     end_year: int | None = None
+    era: str | None = None
+    character: str | None = None
+    location: str | None = None
+    causal_depth: int | None = None
     limit: int = 50
     offset: int = 0
     order: str = "asc"

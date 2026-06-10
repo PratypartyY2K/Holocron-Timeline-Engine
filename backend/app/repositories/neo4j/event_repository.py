@@ -55,15 +55,22 @@ class Neo4jEventRepository(EventRepository):
         *,
         start_year: int | None,
         end_year: int | None,
+        era: str | None,
+        character: str | None,
+        location: str | None,
+        causal_depth: int | None,
         limit: int,
         offset: int,
         order: str,
     ) -> tuple[list[Event], int]:
         direction = "ASC" if order == "asc" else "DESC"
+        semantic_filter = self._build_semantic_filter(character=character, location=location, causal_depth=causal_depth)
         query = f"""
         MATCH (e:Event)
         WHERE ($start_year IS NULL OR e.start_year >= $start_year)
           AND ($end_year IS NULL OR coalesce(e.end_year, e.start_year) <= $end_year)
+          AND ($era IS NULL OR e.era = $era)
+          AND {semantic_filter}
         WITH e
         ORDER BY e.start_year {direction}, e.title ASC
         SKIP $offset
@@ -74,11 +81,16 @@ class Neo4jEventRepository(EventRepository):
         MATCH (e:Event)
         WHERE ($start_year IS NULL OR e.start_year >= $start_year)
           AND ($end_year IS NULL OR coalesce(e.end_year, e.start_year) <= $end_year)
+          AND ($era IS NULL OR e.era = $era)
+          AND {semantic_filter}
         RETURN count(e) AS total
         """
         params = {
             "start_year": start_year,
             "end_year": end_year,
+            "era": era,
+            "character": character,
+            "location": location,
             "limit": limit,
             "offset": offset,
         }
@@ -213,3 +225,40 @@ class Neo4jEventRepository(EventRepository):
         if depth is None:
             return "*1.."
         return f"*1..{depth}"
+
+    @staticmethod
+    def _build_semantic_filter(*, character: str | None, location: str | None, causal_depth: int | None) -> str:
+        direct_conditions: list[str] = []
+        if character is not None:
+            direct_conditions.append(
+                "EXISTS { MATCH (e)-[:INVOLVES]->(:Character {slug: $character}) }"
+            )
+        if location is not None:
+            direct_conditions.append(
+                "EXISTS { MATCH (e)-[:LOCATED_IN]->(:Planet {slug: $location}) }"
+            )
+
+        if not direct_conditions:
+            return "true"
+
+        direct_filter = " AND ".join(direct_conditions)
+        if causal_depth is None:
+            return f"({direct_filter})"
+
+        seed_conditions: list[str] = []
+        if character is not None:
+            seed_conditions.append(
+                "EXISTS { MATCH (seed)-[:INVOLVES]->(:Character {slug: $character}) }"
+            )
+        if location is not None:
+            seed_conditions.append(
+                "EXISTS { MATCH (seed)-[:LOCATED_IN]->(:Planet {slug: $location}) }"
+            )
+        seed_filter = " AND ".join(seed_conditions)
+        return (
+            "EXISTS { "
+            "MATCH (seed:Event) "
+            f"WHERE {seed_filter} "
+            f"AND EXISTS {{ MATCH (seed)-[:CAUSES*0..{causal_depth}]-(e) }} "
+            "}"
+        )

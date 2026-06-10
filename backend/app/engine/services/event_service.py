@@ -51,10 +51,16 @@ class EventService:
             raise ValidationError("order must be 'asc' or 'desc'")
         if query.start_year is not None and query.end_year is not None and query.end_year < query.start_year:
             raise ChronologyError("end_year must be greater than or equal to start_year")
+        if query.causal_depth is not None and query.causal_depth <= 0:
+            raise ValidationError("causal_depth must be greater than 0")
 
         return self._event_repository.list_events(
             start_year=query.start_year,
             end_year=query.end_year,
+            era=query.era,
+            character=query.character,
+            location=query.location,
+            causal_depth=query.causal_depth,
             limit=query.limit,
             offset=query.offset,
             order=query.order,

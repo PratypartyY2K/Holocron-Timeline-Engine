@@ -40,6 +40,10 @@ class FakeEventRepository(EventRepository):
         *,
         start_year: int | None,
         end_year: int | None,
+        era: str | None,
+        character: str | None,
+        location: str | None,
+        causal_depth: int | None,
         limit: int,
         offset: int,
         order: str,
@@ -49,6 +53,8 @@ class FakeEventRepository(EventRepository):
             events = [event for event in events if event.start_year >= start_year]
         if end_year is not None:
             events = [event for event in events if (event.end_year or event.start_year) <= end_year]
+        if era is not None:
+            events = [event for event in events if event.era == era]
         reverse = order == "desc"
         events.sort(key=lambda item: (item.start_year, item.title), reverse=reverse)
         total = len(events)
