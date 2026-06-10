@@ -92,6 +92,21 @@ Open Neo4j Browser and run the Cypher from:
 scripts/seed/init_schema.cypher
 ```
 
+### Audit Relationship Integrity
+
+To audit existing graph data for relationship integrity violations, run:
+
+```text
+scripts/audit/relationship_integrity.cypher
+```
+
+The audit checks for:
+
+- self-referential relationships
+- duplicate relationships with the same type and endpoint pair
+- relationship types attached to invalid source/target node label combinations
+- non-canonical ordering for symmetric faction relationships
+
 ### Useful Frontend Routes
 
 - timeline: `http://localhost:3000/events`
