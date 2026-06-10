@@ -37,6 +37,10 @@ export type CausalGraphResponse = {
 export type TimelineQuery = {
   startYear?: number;
   endYear?: number;
+  era?: string;
+  character?: string;
+  location?: string;
+  causalDepth?: number;
   order?: "asc" | "desc";
   limit?: number;
   offset?: number;
@@ -89,6 +93,18 @@ export async function getTimelineEvents(query: TimelineQuery = {}): Promise<Even
   }
   if (query.endYear !== undefined) {
     url.searchParams.set("end_year", String(query.endYear));
+  }
+  if (query.era !== undefined) {
+    url.searchParams.set("era", query.era);
+  }
+  if (query.character !== undefined) {
+    url.searchParams.set("character", query.character);
+  }
+  if (query.location !== undefined) {
+    url.searchParams.set("location", query.location);
+  }
+  if (query.causalDepth !== undefined) {
+    url.searchParams.set("causal_depth", String(query.causalDepth));
   }
   if (query.order !== undefined) {
     url.searchParams.set("order", query.order);
