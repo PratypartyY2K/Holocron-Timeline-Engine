@@ -16,4 +16,3 @@ neo4j-data/
 *.egg-info/
 *.tsbuildinfo
 uv.lock
-*.cypher
