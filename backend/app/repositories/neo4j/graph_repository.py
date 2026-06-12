@@ -42,6 +42,28 @@ class Neo4jGraphRepository(GraphRepository):
             return None
         return map_relationship_record(dict(record["relationship"]))
 
+    def causes_path_exists(self, *, from_node_id: str, to_node_id: str) -> bool:
+        query = """
+        MATCH (:Event {id: $from_node_id})-[:CAUSES*1..]->(:Event {id: $to_node_id})
+        RETURN count(*) > 0 AS path_exists
+        """
+        with self._driver.session(database=self._database) as session:
+            record = session.run(query, from_node_id=from_node_id, to_node_id=to_node_id).single()
+        if record is None:
+            return False
+        return bool(record["path_exists"])
+
+    def get_event_chronology(self, event_id: str) -> tuple[int, int | None] | None:
+        query = """
+        MATCH (e:Event {id: $event_id})
+        RETURN e.start_year AS start_year, e.end_year AS end_year
+        """
+        with self._driver.session(database=self._database) as session:
+            record = session.run(query, event_id=event_id).single()
+        if record is None:
+            return None
+        return int(record["start_year"]), record["end_year"]
+
     def create_relationship(self, relationship: Relationship) -> Relationship:
         query = f"""
         MATCH (source {{id: $from_node_id}})

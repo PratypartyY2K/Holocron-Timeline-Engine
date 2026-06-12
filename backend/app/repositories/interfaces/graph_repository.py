@@ -20,5 +20,13 @@ class GraphRepository(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def causes_path_exists(self, *, from_node_id: str, to_node_id: str) -> bool:
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_event_chronology(self, event_id: str) -> tuple[int, int | None] | None:
+        raise NotImplementedError
+
+    @abstractmethod
     def create_relationship(self, relationship: Relationship) -> Relationship:
         raise NotImplementedError

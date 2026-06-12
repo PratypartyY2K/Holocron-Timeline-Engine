@@ -2,7 +2,7 @@ from uuid import uuid4
 
 from app.domain.entities.relationship import Relationship
 from app.domain.enums import NodeType, RelationshipType
-from app.domain.errors import DuplicateEntityError, EntityNotFoundError, UnsupportedRelationshipError, ValidationError
+from app.domain.errors import ChronologyError, DuplicateEntityError, EntityNotFoundError, UnsupportedRelationshipError, ValidationError
 from app.engine.dto import CreateRelationshipCommand
 from app.repositories.interfaces.graph_repository import GraphRepository
 
@@ -53,6 +53,9 @@ class RelationshipService:
 
         source_id = command.from_node_id
         target_id = command.to_node_id
+        if command.type is RelationshipType.CAUSES:
+            self._validate_causes_relationship(source_id=source_id, target_id=target_id)
+
         if command.type in CANONICAL_EDGE_TYPES and target_id < source_id:
             source_id, target_id = target_id, source_id
 
@@ -74,3 +77,25 @@ class RelationshipService:
             note=command.note,
         )
         return self._graph_repository.create_relationship(relationship)
+
+    def _validate_causes_relationship(self, *, source_id: str, target_id: str) -> None:
+        if self._graph_repository.causes_path_exists(from_node_id=target_id, to_node_id=source_id):
+            raise ValidationError(
+                f"CAUSES relationship would introduce a cycle: {source_id} -> {target_id}"
+            )
+
+        source_chronology = self._graph_repository.get_event_chronology(source_id)
+        if source_chronology is None:
+            raise EntityNotFoundError(f"Event not found: {source_id}")
+
+        target_chronology = self._graph_repository.get_event_chronology(target_id)
+        if target_chronology is None:
+            raise EntityNotFoundError(f"Event not found: {target_id}")
+
+        source_start_year, _ = source_chronology
+        target_start_year, _ = target_chronology
+        if source_start_year > target_start_year:
+            raise ChronologyError(
+                "CAUSES relationship ordering is impossible: "
+                f"source event starts after target event ({source_start_year} > {target_start_year})"
+            )

@@ -5,7 +5,7 @@ from app.domain.entities.faction import Faction
 from app.domain.entities.node_reference import NodeReference
 from app.domain.entities.planet import Planet
 from app.domain.entities.relationship import Relationship
-from app.domain.enums import NodeType
+from app.domain.enums import NodeType, RelationshipType
 from app.repositories.interfaces.character_repository import CharacterRepository
 from app.repositories.interfaces.event_repository import EventRepository
 from app.repositories.interfaces.faction_repository import FactionRepository
@@ -125,6 +125,7 @@ class FakeGraphRepository(GraphRepository):
     def __init__(self, nodes: list[NodeReference] | None = None) -> None:
         self.nodes_by_id = {node.id: node for node in (nodes or [])}
         self.relationships: list[Relationship] = []
+        self.event_chronology_by_id: dict[str, tuple[int, int | None]] = {}
 
     def get_node_reference(self, node_id: str) -> NodeReference | None:
         return self.nodes_by_id.get(node_id)
@@ -144,6 +145,26 @@ class FakeGraphRepository(GraphRepository):
             ):
                 return relationship
         return None
+
+    def causes_path_exists(self, *, from_node_id: str, to_node_id: str) -> bool:
+        frontier = [from_node_id]
+        visited: set[str] = set()
+        while frontier:
+            current = frontier.pop()
+            if current == to_node_id:
+                return True
+            if current in visited:
+                continue
+            visited.add(current)
+            for relationship in self.relationships:
+                if relationship.type is not RelationshipType.CAUSES:
+                    continue
+                if relationship.from_node_id == current:
+                    frontier.append(relationship.to_node_id)
+        return False
+
+    def get_event_chronology(self, event_id: str) -> tuple[int, int | None] | None:
+        return self.event_chronology_by_id.get(event_id)
 
     def create_relationship(self, relationship: Relationship) -> Relationship:
         self.relationships.append(relationship)

@@ -1,10 +1,14 @@
 import pytest
 
 from app.domain.enums import NodeType, RelationshipType
-from app.domain.errors import DuplicateEntityError, EntityNotFoundError, UnsupportedRelationshipError, ValidationError
+from app.domain.errors import ChronologyError, DuplicateEntityError, EntityNotFoundError, UnsupportedRelationshipError, ValidationError
 from app.engine.dto import CreateRelationshipCommand
 from app.engine.services.relationship_service import RelationshipService
 from tests.unit.engine.fakes import FakeGraphRepository, make_node
+
+
+def seed_event(repository: FakeGraphRepository, event_id: str, start_year: int, end_year: int | None = None) -> None:
+    repository.event_chronology_by_id[event_id] = (start_year, end_year)
 
 
 def test_create_faction_relationship_canonicalizes_edge_order() -> None:
@@ -71,6 +75,8 @@ def test_create_event_causal_relationship_keeps_direction() -> None:
             make_node("event-2", NodeType.EVENT),
         ]
     )
+    seed_event(repository, "event-1", -1)
+    seed_event(repository, "event-2", 0)
     service = RelationshipService(repository)
 
     relationship = service.create_relationship(
@@ -110,6 +116,7 @@ def test_create_character_located_in_planet_relationship_is_allowed() -> None:
 
 def test_create_relationship_rejects_self_cycles() -> None:
     repository = FakeGraphRepository(nodes=[make_node("event-1", NodeType.EVENT)])
+    seed_event(repository, "event-1", -1)
     service = RelationshipService(repository)
 
     with pytest.raises(ValidationError):
@@ -130,6 +137,8 @@ def test_create_relationship_rejects_duplicates() -> None:
             make_node("event-2", NodeType.EVENT),
         ]
     )
+    seed_event(repository, "event-1", -1)
+    seed_event(repository, "event-2", 0)
     service = RelationshipService(repository)
 
     service.create_relationship(
@@ -177,5 +186,68 @@ def test_create_symmetric_relationship_rejects_duplicates_after_canonicalization
                 from_node_id="aaa-faction",
                 to_node_id="zzz-faction",
                 note="Same relationship reversed",
+            )
+        )
+
+
+def test_create_causes_relationship_rejects_indirect_cycles() -> None:
+    repository = FakeGraphRepository(
+        nodes=[
+            make_node("event-1", NodeType.EVENT),
+            make_node("event-2", NodeType.EVENT),
+            make_node("event-3", NodeType.EVENT),
+        ]
+    )
+    seed_event(repository, "event-1", -5)
+    seed_event(repository, "event-2", -4)
+    seed_event(repository, "event-3", -3)
+    service = RelationshipService(repository)
+
+    service.create_relationship(
+        CreateRelationshipCommand(
+            type=RelationshipType.CAUSES,
+            from_node_id="event-1",
+            to_node_id="event-2",
+            note=None,
+        )
+    )
+    service.create_relationship(
+        CreateRelationshipCommand(
+            type=RelationshipType.CAUSES,
+            from_node_id="event-2",
+            to_node_id="event-3",
+            note=None,
+        )
+    )
+
+    with pytest.raises(ValidationError, match="introduce a cycle"):
+        service.create_relationship(
+            CreateRelationshipCommand(
+                type=RelationshipType.CAUSES,
+                from_node_id="event-3",
+                to_node_id="event-1",
+                note=None,
+            )
+        )
+
+
+def test_create_causes_relationship_rejects_impossible_chronology() -> None:
+    repository = FakeGraphRepository(
+        nodes=[
+            make_node("event-1", NodeType.EVENT),
+            make_node("event-2", NodeType.EVENT),
+        ]
+    )
+    seed_event(repository, "event-1", 5)
+    seed_event(repository, "event-2", 1)
+    service = RelationshipService(repository)
+
+    with pytest.raises(ChronologyError, match="ordering is impossible"):
+        service.create_relationship(
+            CreateRelationshipCommand(
+                type=RelationshipType.CAUSES,
+                from_node_id="event-1",
+                to_node_id="event-2",
+                note=None,
             )
         )
