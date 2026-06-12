@@ -20,6 +20,8 @@ Frontend:
 - slug-based entity detail pages at `/characters/{slug}`, `/planets/{slug}`, and `/factions/{slug}`
 - dependency and consequence panels with depth controls
 - React Flow causal graph with node click navigation
+- interactive "What If?" sandbox toggle on event detail pages
+- broken-path simulation that deactivates the focus event and highlights impacted downstream nodes
 - browser-side data fetching for timeline, entity, and event detail API calls
 
 Backend:
@@ -29,6 +31,7 @@ Backend:
 - relationship creation
 - dependency and consequence traversal
 - causal graph endpoint for event-focused graph rendering
+- impact analysis endpoint for downstream breakage simulation
 
 ## Repository Layout
 
@@ -58,6 +61,7 @@ scripts/   development and seed scripts
 - `GET /api/v1/events/{event_id}/dependencies?depth=N`
 - `GET /api/v1/events/{event_id}/consequences?depth=N`
 - `GET /api/v1/events/{event_id}/causal-graph?depth=N`
+- `GET /api/v1/events/{event_id}/impact`
 
 `GET /api/v1/events` now supports combined filters such as:
 
@@ -135,6 +139,16 @@ The audit checks for:
 - location-filtered timeline example: `http://localhost:3000/?location=tatooine`
 - entity browser examples: `http://localhost:3000/characters`, `http://localhost:3000/planets`, `http://localhost:3000/factions`
 - depth example: `http://localhost:3000/events/battle-of-yavin?depth=2`
+
+### What-If Sandbox
+
+On an event detail page, the Sandbox toggle activates a what-if simulation for the
+currently focused event. The frontend fetches `GET /api/v1/events/{event_id}/impact`
+on demand, then uses the returned downstream events and broken `CAUSES` edges to:
+
+- gray out the selected event as deactivated
+- mark downstream impacted events as broken
+- highlight the broken causal path directly in the React Flow graph
 
 ## Local Installation
 
