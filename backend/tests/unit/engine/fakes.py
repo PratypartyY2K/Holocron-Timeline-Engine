@@ -79,11 +79,16 @@ class FakeEventRepository(EventRepository):
 
 class FakeCharacterRepository(CharacterRepository):
     def __init__(self) -> None:
+        self.characters_by_id: dict[str, Character] = {}
         self.characters_by_slug: dict[str, Character] = {}
 
     def create(self, character: Character) -> Character:
+        self.characters_by_id[character.id] = character
         self.characters_by_slug[character.slug] = character
         return character
+
+    def get_by_id(self, character_id: str) -> Character | None:
+        return self.characters_by_id.get(character_id)
 
     def get_by_slug(self, slug: str) -> Character | None:
         return self.characters_by_slug.get(slug)

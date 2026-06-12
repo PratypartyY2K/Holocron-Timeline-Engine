@@ -229,6 +229,47 @@ export async function getCharacterBySlug(slug: string): Promise<CharacterRecord>
   return (await response.json()) as CharacterRecord;
 }
 
+export async function getCharacterTimeline(
+  characterId: string,
+  query: Omit<TimelineQuery, "character"> = {},
+): Promise<EventListResponse> {
+  const url = new URL(`${getApiBaseUrl()}/api/v1/characters/${characterId}/timeline`);
+  if (query.startYear !== undefined) {
+    url.searchParams.set("start_year", String(query.startYear));
+  }
+  if (query.endYear !== undefined) {
+    url.searchParams.set("end_year", String(query.endYear));
+  }
+  if (query.era !== undefined) {
+    url.searchParams.set("era", query.era);
+  }
+  if (query.location !== undefined) {
+    url.searchParams.set("location", query.location);
+  }
+  if (query.causalDepth !== undefined) {
+    url.searchParams.set("causal_depth", String(query.causalDepth));
+  }
+  if (query.order !== undefined) {
+    url.searchParams.set("order", query.order);
+  }
+  if (query.limit !== undefined) {
+    url.searchParams.set("limit", String(query.limit));
+  }
+  if (query.offset !== undefined) {
+    url.searchParams.set("offset", String(query.offset));
+  }
+
+  const response = await fetch(url.toString(), {
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch timeline for character ${characterId}: ${response.status}`);
+  }
+
+  return (await response.json()) as EventListResponse;
+}
+
 export async function getPlanets(): Promise<PlanetRecord[]> {
   return getOptionalEntityList<PlanetRecord>("/api/v1/planets", "planets");
 }

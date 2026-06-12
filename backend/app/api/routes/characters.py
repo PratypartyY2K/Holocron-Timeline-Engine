@@ -1,9 +1,11 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 
-from app.api.dependencies.services import get_character_service
-from app.engine.dto import CreateCharacterCommand
+from app.api.dependencies.services import get_character_service, get_event_service
+from app.engine.dto import CreateCharacterCommand, ListEventsQuery
 from app.engine.services.character_service import CharacterService
+from app.engine.services.event_service import EventService
 from app.schemas.characters import CharacterResponse, CreateCharacterRequest
+from app.schemas.events import EventListResponse, EventResponse
 
 router = APIRouter()
 
@@ -38,3 +40,39 @@ def get_character_by_slug(
     service: CharacterService = Depends(get_character_service),
 ) -> CharacterResponse:
     return CharacterResponse.model_validate(service.get_character_by_slug(slug))
+
+
+@router.get("/{character_id}/timeline", response_model=EventListResponse)
+def get_character_timeline(
+    character_id: str,
+    start_year: int | None = Query(default=None),
+    end_year: int | None = Query(default=None),
+    era: str | None = Query(default=None),
+    location: str | None = Query(default=None),
+    causal_depth: int | None = Query(default=None, ge=1, le=8),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    order: str = Query(default="asc", pattern="^(asc|desc)$"),
+    character_service: CharacterService = Depends(get_character_service),
+    event_service: EventService = Depends(get_event_service),
+) -> EventListResponse:
+    character = character_service.get_character(character_id)
+    events, total = event_service.list_events(
+        ListEventsQuery(
+            start_year=start_year,
+            end_year=end_year,
+            era=era,
+            character=character.slug,
+            location=location,
+            causal_depth=causal_depth,
+            limit=limit,
+            offset=offset,
+            order=order,
+        )
+    )
+    return EventListResponse(
+        items=[EventResponse.model_validate(item) for item in events],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )

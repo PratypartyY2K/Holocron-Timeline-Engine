@@ -94,6 +94,13 @@ def test_get_character_by_slug_raises_when_missing() -> None:
         service.get_character_by_slug("missing")
 
 
+def test_get_character_by_id_raises_when_missing() -> None:
+    service = CharacterService(FakeCharacterRepository())
+
+    with pytest.raises(EntityNotFoundError):
+        service.get_character("missing")
+
+
 def test_create_planet_persists_to_repository() -> None:
     repository = FakePlanetRepository()
     service = PlanetService(repository)

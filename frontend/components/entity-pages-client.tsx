@@ -3,7 +3,9 @@
 import type { Route } from "next";
 import Link from "next/link";
 import {
+  formatEventRange,
   getCharacterBySlug,
+  getCharacterTimeline,
   getCharacters,
   getFactionBySlug,
   getFactions,
@@ -86,7 +88,20 @@ export function CharactersPageClient() {
 }
 
 export function CharacterDetailPageClient({ slug }: EntitySlugProps) {
-  const { data, error, isLoading } = useAsyncData(() => getCharacterBySlug(slug), [slug]);
+  const { data, error, isLoading } = useAsyncData(
+    async () => {
+      const character = await getCharacterBySlug(slug);
+      const timeline = await getCharacterTimeline(character.id, {
+        limit: 12,
+        order: "asc",
+      });
+      return {
+        character,
+        timeline,
+      };
+    },
+    [slug],
+  );
 
   if (isLoading) {
     return (
@@ -113,29 +128,29 @@ export function CharacterDetailPageClient({ slug }: EntitySlugProps) {
           <Link href={"/characters" as Route} className="back-link">
             ← Back to characters
           </Link>
-          <span className="detail-chip">{data.species ?? "Unknown species"}</span>
+          <span className="detail-chip">{data.character.species ?? "Unknown species"}</span>
         </div>
 
         <div className="detail-meta">
-          <span className="detail-slug">/{data.slug}</span>
-          <span className="timeline-era">{data.homeworld_name ?? "No homeworld on record"}</span>
+          <span className="detail-slug">/{data.character.slug}</span>
+          <span className="timeline-era">{data.character.homeworld_name ?? "No homeworld on record"}</span>
         </div>
 
-        <h1>{data.name}</h1>
-        <p className="detail-description">{data.description ?? "No description available."}</p>
+        <h1>{data.character.name}</h1>
+        <p className="detail-description">{data.character.description ?? "No description available."}</p>
 
         <div className="hero-stats detail-stats">
           <div className="stat-card">
             <span className="stat-label">Species</span>
-            <strong>{data.species ?? "Unknown"}</strong>
+            <strong>{data.character.species ?? "Unknown"}</strong>
           </div>
           <div className="stat-card">
             <span className="stat-label">Homeworld</span>
-            <strong>{data.homeworld_name ?? "Unlisted"}</strong>
+            <strong>{data.character.homeworld_name ?? "Unlisted"}</strong>
           </div>
           <div className="stat-card">
-            <span className="stat-label">Timeline lookup</span>
-            <strong>Character-aware event filter</strong>
+            <span className="stat-label">Timeline hits</span>
+            <strong>{data.timeline.total} related events</strong>
           </div>
         </div>
       </section>
@@ -144,15 +159,35 @@ export function CharacterDetailPageClient({ slug }: EntitySlugProps) {
         <header className="timeline-header entity-header">
           <div>
             <p className="section-kicker">Related chronology</p>
-            <h2>Events involving {data.name}</h2>
+            <h2>Events involving {data.character.name}</h2>
           </div>
           <p className="timeline-caption">
-            Jump into <code>/api/v1/events?character={data.slug}</code> from the main timeline.
+            Browser-fetched from <code>/api/v1/characters/{data.character.id}/timeline</code>.
           </p>
         </header>
+        <div className="detail-list">
+          {data.timeline.items.length === 0 ? (
+            <p className="detail-empty">No timeline events reference this character yet.</p>
+          ) : (
+            data.timeline.items.map((event) => (
+              <Link
+                key={event.id}
+                href={`/events/${event.slug}` as Route}
+                className="detail-list-card"
+              >
+                <div className="detail-list-meta">
+                  <span>{formatEventRange(event.start_year, event.end_year)}</span>
+                  <span>{event.era ?? "Unclassified era"}</span>
+                </div>
+                <h3>{event.title}</h3>
+                <p>{event.description ?? "No description available."}</p>
+              </Link>
+            ))
+          )}
+        </div>
         <div className="entity-footer">
-          <Link href={`/?character=${data.slug}` as Route} className="action-button">
-            View filtered timeline
+          <Link href={`/?character=${data.character.slug}` as Route} className="secondary-link">
+            Open main timeline filters
           </Link>
         </div>
       </section>

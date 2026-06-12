@@ -9,6 +9,10 @@ class CharacterRepository(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def get_by_id(self, character_id: str) -> Character | None:
+        raise NotImplementedError
+
+    @abstractmethod
     def get_by_slug(self, slug: str) -> Character | None:
         raise NotImplementedError
 

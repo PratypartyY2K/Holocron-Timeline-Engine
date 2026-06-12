@@ -31,6 +31,17 @@ class Neo4jCharacterRepository(CharacterRepository):
             record = session.execute_write(self._create_tx, query, character)
         return map_character_record(record)
 
+    def get_by_id(self, character_id: str) -> Character | None:
+        query = """
+        MATCH (c:Character {id: $character_id})
+        RETURN properties(c) AS character
+        """
+        with self._driver.session(database=self._database) as session:
+            record = session.run(query, character_id=character_id).single()
+        if record is None:
+            return None
+        return map_character_record(dict(record["character"]))
+
     def get_by_slug(self, slug: str) -> Character | None:
         query = """
         MATCH (c:Character {slug: $slug})

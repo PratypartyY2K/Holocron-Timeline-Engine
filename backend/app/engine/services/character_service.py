@@ -28,6 +28,12 @@ class CharacterService:
         )
         return self._character_repository.create(character)
 
+    def get_character(self, character_id: str) -> Character:
+        character = self._character_repository.get_by_id(character_id)
+        if character is None:
+            raise EntityNotFoundError(f"Character not found: {character_id}")
+        return character
+
     def get_character_by_slug(self, slug: str) -> Character:
         character = self._character_repository.get_by_slug(slug)
         if character is None:
