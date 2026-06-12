@@ -59,3 +59,9 @@ class CausalGraphResponse(BaseModel):
     depth: int
     nodes: list[EventResponse]
     edges: list[CausalGraphEdgeResponse]
+
+
+class EventImpactResponse(BaseModel):
+    event_id: str
+    impacted_events: list[EventResponse]
+    broken_edges: list[CausalGraphEdgeResponse]

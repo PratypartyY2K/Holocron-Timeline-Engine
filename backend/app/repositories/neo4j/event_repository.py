@@ -5,6 +5,7 @@ from neo4j import Driver
 from app.core.config import Settings
 from app.domain.entities.causal_graph import CausalGraph, CausalGraphEdge
 from app.domain.entities.event import Event
+from app.domain.entities.event_impact import EventImpact
 from app.domain.enums import RelationshipType
 from app.repositories.interfaces.event_repository import EventRepository
 from app.repositories.neo4j.mappers import map_event_record
@@ -186,6 +187,60 @@ class Neo4jEventRepository(EventRepository):
             depth=depth,
             nodes=nodes,
             edges=edges,
+        )
+
+    def get_impact(self, event_id: str) -> EventImpact:
+        edge_query = """
+        MATCH (focus:Event {id: $event_id})
+        OPTIONAL MATCH downstream_path = (focus)-[:CAUSES*1..]->(:Event)
+        UNWIND CASE
+            WHEN downstream_path IS NULL THEN []
+            ELSE relationships(downstream_path)
+        END AS rel
+        RETURN
+            [edge IN collect(DISTINCT rel) WHERE edge IS NOT NULL | {
+                id: coalesce(edge.id, startNode(edge).id + '->' + endNode(edge).id),
+                source_id: startNode(edge).id,
+                target_id: endNode(edge).id,
+                type: coalesce(edge.type, 'CAUSES'),
+                note: edge.note
+            }] AS edges
+        """
+        node_query = """
+        MATCH (e:Event)
+        WHERE e.id IN $node_ids
+        RETURN properties(e) AS event
+        """
+        with self._driver.session(database=self._database) as session:
+            edge_record = session.run(edge_query, event_id=event_id).single()
+            raw_edges = [] if edge_record is None else list(edge_record["edges"])
+
+            impacted_node_ids: set[str] = set()
+            for edge in raw_edges:
+                if edge["source_id"] != event_id:
+                    impacted_node_ids.add(edge["source_id"])
+                if edge["target_id"] != event_id:
+                    impacted_node_ids.add(edge["target_id"])
+
+            node_result = session.run(node_query, node_ids=list(impacted_node_ids))
+            impacted_events = [map_event_record(dict(record["event"])) for record in node_result]
+
+        broken_edges = [
+            CausalGraphEdge(
+                id=edge["id"],
+                source_id=edge["source_id"],
+                target_id=edge["target_id"],
+                type=RelationshipType(edge["type"]),
+                note=edge.get("note"),
+            )
+            for edge in raw_edges
+        ]
+        impacted_events.sort(key=lambda item: (item.start_year, item.title))
+        broken_edges.sort(key=lambda item: (item.source_id, item.target_id, item.id))
+        return EventImpact(
+            event_id=event_id,
+            impacted_events=impacted_events,
+            broken_edges=broken_edges,
         )
 
     @staticmethod

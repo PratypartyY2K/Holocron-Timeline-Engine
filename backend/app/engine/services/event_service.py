@@ -2,6 +2,7 @@ from uuid import uuid4
 
 from app.domain.entities.causal_graph import CausalGraph
 from app.domain.entities.event import Event
+from app.domain.entities.event_impact import EventImpact
 from app.domain.errors import ChronologyError, DuplicateEntityError, EntityNotFoundError, ValidationError
 from app.engine.dto import CreateEventCommand, ListEventsQuery
 from app.repositories.interfaces.event_repository import EventRepository
@@ -80,6 +81,10 @@ class EventService:
         self.get_event(event_id)
         self._validate_depth(depth)
         return self._event_repository.get_causal_graph(event_id, depth=depth)
+
+    def get_impact(self, event_id: str) -> EventImpact:
+        self.get_event(event_id)
+        return self._event_repository.get_impact(event_id)
 
     @staticmethod
     def _validate_create_command(command: CreateEventCommand) -> None:

@@ -1,6 +1,7 @@
 import pytest
 
 from app.domain.entities.event import Event
+from app.domain.entities.event_impact import EventImpact
 from app.domain.errors import ChronologyError, DuplicateEntityError, EntityNotFoundError, ValidationError
 from app.engine.dto import CreateEventCommand, ListEventsQuery
 from app.engine.services.event_service import EventService
@@ -220,3 +221,32 @@ def test_get_causal_graph_passes_depth_to_repository() -> None:
     assert graph.focus_event_id == "event-1"
     assert graph.depth == 4
     assert repository.last_causal_graph_depth == 4
+
+
+def test_get_impact_requires_existing_event() -> None:
+    service = EventService(FakeEventRepository())
+
+    with pytest.raises(EntityNotFoundError):
+        service.get_impact("missing")
+
+
+def test_get_impact_returns_repository_payload() -> None:
+    repository = FakeEventRepository()
+    repository.create(
+        Event(
+            id="event-1",
+            slug="battle-of-yavin",
+            title="Battle of Yavin",
+            description=None,
+            start_year=0,
+            end_year=0,
+            era=None,
+            canon_status=None,
+        )
+    )
+    repository.impacts["event-1"] = EventImpact(event_id="event-1")
+    service = EventService(repository)
+
+    impact = service.get_impact("event-1")
+
+    assert impact.event_id == "event-1"

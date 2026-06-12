@@ -1,6 +1,7 @@
 from app.domain.entities.character import Character
 from app.domain.entities.causal_graph import CausalGraph
 from app.domain.entities.event import Event
+from app.domain.entities.event_impact import EventImpact
 from app.domain.entities.faction import Faction
 from app.domain.entities.node_reference import NodeReference
 from app.domain.entities.planet import Planet
@@ -21,6 +22,7 @@ class FakeEventRepository(EventRepository):
         self.dependencies: dict[str, list[Event]] = {}
         self.consequences: dict[str, list[Event]] = {}
         self.causal_graphs: dict[tuple[str, int], CausalGraph] = {}
+        self.impacts: dict[str, EventImpact] = {}
         self.last_dependencies_depth: int | None = None
         self.last_consequences_depth: int | None = None
         self.last_causal_graph_depth: int | None = None
@@ -75,6 +77,9 @@ class FakeEventRepository(EventRepository):
             (event_id, depth),
             CausalGraph(focus_event_id=event_id, depth=depth),
         )
+
+    def get_impact(self, event_id: str) -> EventImpact:
+        return self.impacts.get(event_id, EventImpact(event_id=event_id))
 
 
 class FakeCharacterRepository(CharacterRepository):

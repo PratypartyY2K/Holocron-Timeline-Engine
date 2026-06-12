@@ -3,7 +3,13 @@ from fastapi import APIRouter, Depends, Query, status
 from app.api.dependencies.services import get_event_service
 from app.engine.dto import CreateEventCommand, ListEventsQuery
 from app.engine.services.event_service import EventService
-from app.schemas.events import CausalGraphResponse, CreateEventRequest, EventListResponse, EventResponse
+from app.schemas.events import (
+    CausalGraphResponse,
+    CreateEventRequest,
+    EventImpactResponse,
+    EventListResponse,
+    EventResponse,
+)
 
 router = APIRouter()
 
@@ -108,4 +114,17 @@ def get_causal_graph(
         depth=graph.depth,
         nodes=[EventResponse.model_validate(node) for node in graph.nodes],
         edges=[edge for edge in graph.edges],
+    )
+
+
+@router.get("/{event_id}/impact", response_model=EventImpactResponse)
+def get_event_impact(
+    event_id: str,
+    service: EventService = Depends(get_event_service),
+) -> EventImpactResponse:
+    impact = service.get_impact(event_id)
+    return EventImpactResponse(
+        event_id=impact.event_id,
+        impacted_events=[EventResponse.model_validate(item) for item in impact.impacted_events],
+        broken_edges=[edge for edge in impact.broken_edges],
     )

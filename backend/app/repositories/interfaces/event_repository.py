@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 
 from app.domain.entities.causal_graph import CausalGraph
 from app.domain.entities.event import Event
+from app.domain.entities.event_impact import EventImpact
 
 
 class EventRepository(ABC):
@@ -43,4 +44,8 @@ class EventRepository(ABC):
 
     @abstractmethod
     def get_causal_graph(self, event_id: str, depth: int) -> CausalGraph:
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_impact(self, event_id: str) -> EventImpact:
         raise NotImplementedError
