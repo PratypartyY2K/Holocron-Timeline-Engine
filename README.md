@@ -20,6 +20,8 @@ Frontend:
 - slug-based entity detail pages at `/characters/{slug}`, `/planets/{slug}`, and `/factions/{slug}`
 - dependency and consequence panels with depth controls
 - React Flow causal graph with node click navigation
+- automatic causal graph layout using `@dagrejs/dagre`
+- chronology-aware left-to-right graph positioning for complex event paths
 - interactive "What If?" sandbox toggle on event detail pages
 - broken-path simulation that deactivates the focus event and highlights impacted downstream nodes
 - browser-side data fetching for timeline, entity, and event detail API calls
@@ -86,6 +88,10 @@ docker compose -f docker/compose.yml up --build
 The backend container runs `uvicorn --reload` in local Compose, so route and service changes
 should be picked up automatically after file edits.
 
+The frontend container now installs dependencies from `package-lock.json` with `npm ci`, so
+dependency-sensitive UI changes such as graph layout packages are reproducible in Docker as
+well as local Node installs.
+
 Key endpoints:
 
 - frontend: `http://localhost:3000`
@@ -149,6 +155,13 @@ on demand, then uses the returned downstream events and broken `CAUSES` edges to
 - gray out the selected event as deactivated
 - mark downstream impacted events as broken
 - highlight the broken causal path directly in the React Flow graph
+
+### Graph Layout
+
+The event detail causal graph uses `@dagrejs/dagre` to compute a cleaner React Flow layout for
+multi-node timelines. The layout engine handles vertical spacing and overlap avoidance, while
+event chronology still determines the left-to-right column order so causal paths stay readable
+as the graph grows.
 
 ## Local Installation
 
