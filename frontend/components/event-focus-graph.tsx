@@ -1,6 +1,7 @@
 "use client";
 
 import type { Route } from "next";
+import dagre from "@dagrejs/dagre";
 import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState, type ReactNode } from "react";
 import ReactFlow, {
@@ -8,6 +9,7 @@ import ReactFlow, {
   Controls,
   MarkerType,
   MiniMap,
+  Position,
   type Edge,
   type EdgeTypes,
   type Node,
@@ -44,6 +46,12 @@ const DEFAULT_EDGE_OPTIONS = Object.freeze({
     strokeWidth: 1.6,
   },
 });
+
+const NODE_WIDTH = 240;
+const NODE_HEIGHT = 104;
+const CHRONOLOGY_COLUMN_GAP = 320;
+const LAYOUT_MARGIN_X = 80;
+const LAYOUT_MARGIN_Y = 60;
 
 function formatChronology(year: number): string {
   if (year < 0) {
@@ -123,61 +131,6 @@ function buildGraph(
     }
   }
 
-  const columns = new Map<number, EventRecord[]>();
-  for (const node of graph.nodes) {
-    const incomingDistance = dependencyDistance.get(node.id);
-    const outgoingDistance = consequenceDistance.get(node.id);
-    const column =
-      node.id === graph.focus_event_id
-        ? 0
-        : incomingDistance !== undefined && incomingDistance < 0
-          ? incomingDistance
-          : outgoingDistance ?? 0;
-    const bucket = columns.get(column) ?? [];
-    bucket.push(node);
-    columns.set(column, bucket);
-  }
-
-  const sortedColumns = Array.from(columns.entries()).sort((left, right) => left[0] - right[0]);
-  const reactFlowNodes: Node<GraphNodeData>[] = [];
-  for (const [columnIndex, events] of sortedColumns) {
-    events.sort((left, right) => {
-      if (left.start_year !== right.start_year) {
-        return left.start_year - right.start_year;
-      }
-      return left.title.localeCompare(right.title);
-    });
-
-    events.forEach((event, rowIndex) => {
-      const tone: GraphNodeData["tone"] =
-        event.id === graph.focus_event_id
-          ? "focus"
-          : columnIndex < 0
-            ? "dependency"
-            : "consequence";
-      const status: GraphNodeData["status"] =
-        simulateDisabled && event.id === graph.focus_event_id
-          ? "deactivated"
-          : simulateDisabled && impactedNodeIds.has(event.id)
-            ? "broken"
-            : "normal";
-
-      reactFlowNodes.push({
-        id: event.id,
-        type: "default",
-        position: { x: 380 + columnIndex * 320, y: 40 + rowIndex * 128 },
-        className: `graph-node-shell graph-node-shell-${status}`,
-        data: {
-          label: buildLabel(event),
-          slug: event.slug,
-          tone,
-          status,
-        },
-        draggable: false,
-      });
-    });
-  }
-
   const reactFlowEdges: Edge[] = graph.edges.map((edge) => ({
     id: edge.id,
     source: edge.source_id,
@@ -185,6 +138,8 @@ function buildGraph(
     type: "causal",
     markerEnd: { type: MarkerType.ArrowClosed },
     animated: false,
+    sourcePosition: Position.Right,
+    targetPosition: Position.Left,
     style:
       simulateDisabled && brokenEdgeIds.has(edge.id)
         ? {
@@ -196,6 +151,80 @@ function buildGraph(
       note: edge.note ?? "",
     },
   }));
+
+  const sortedEvents = [...graph.nodes].sort((left, right) => {
+    if (left.start_year !== right.start_year) {
+      return left.start_year - right.start_year;
+    }
+    return left.title.localeCompare(right.title);
+  });
+  const chronologyYears = Array.from(
+    new Set(sortedEvents.map((event) => event.start_year)),
+  ).sort((left, right) => left - right);
+  const chronologyColumnByYear = new Map(
+    chronologyYears.map((year, index) => [year, index]),
+  );
+
+  const dagreGraph = new dagre.graphlib.Graph();
+  dagreGraph.setDefaultEdgeLabel(() => ({}));
+  dagreGraph.setGraph({
+    rankdir: "LR",
+    align: "UL",
+    nodesep: 52,
+    ranksep: 96,
+    edgesep: 30,
+    marginx: LAYOUT_MARGIN_X,
+    marginy: LAYOUT_MARGIN_Y,
+  });
+
+  for (const event of sortedEvents) {
+    dagreGraph.setNode(event.id, {
+      width: NODE_WIDTH,
+      height: NODE_HEIGHT,
+    });
+  }
+
+  for (const edge of graph.edges) {
+    dagreGraph.setEdge(edge.source_id, edge.target_id);
+  }
+
+  dagre.layout(dagreGraph);
+
+  const reactFlowNodes: Node<GraphNodeData>[] = sortedEvents.map((event) => {
+    const tone: GraphNodeData["tone"] =
+      event.id === graph.focus_event_id
+        ? "focus"
+        : (dependencyDistance.get(event.id) ?? 0) < 0
+          ? "dependency"
+          : "consequence";
+    const status: GraphNodeData["status"] =
+      simulateDisabled && event.id === graph.focus_event_id
+        ? "deactivated"
+        : simulateDisabled && impactedNodeIds.has(event.id)
+          ? "broken"
+          : "normal";
+    const layoutNode = dagreGraph.node(event.id);
+    const chronologyColumn = chronologyColumnByYear.get(event.start_year) ?? 0;
+
+    return {
+      id: event.id,
+      type: "default",
+      position: {
+        x: LAYOUT_MARGIN_X + chronologyColumn * CHRONOLOGY_COLUMN_GAP,
+        y: layoutNode.y - NODE_HEIGHT / 2,
+      },
+      className: `graph-node-shell graph-node-shell-${status}`,
+      sourcePosition: Position.Right,
+      targetPosition: Position.Left,
+      data: {
+        label: buildLabel(event),
+        slug: event.slug,
+        tone,
+        status,
+      },
+      draggable: false,
+    };
+  });
 
   return { nodes: reactFlowNodes, edges: reactFlowEdges };
 }

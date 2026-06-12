@@ -9,12 +9,14 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@dagrejs/dagre": "^3.0.0",
     "next": "^15.5.19",
     "react": "18.2.0",
     "react-dom": "18.2.0",
     "reactflow": "^11.11.4"
   },
   "devDependencies": {
+    "@types/dagre": "^0.7.54",
     "@types/node": "^22.7.4",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
