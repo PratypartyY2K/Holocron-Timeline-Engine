@@ -17,6 +17,7 @@ import {
   type BackendStatus,
   type EventListResponse,
 } from "../lib/holocron-api";
+import { searchEntities, type SearchResultRecord } from "../lib/search-api";
 import { useAsyncData } from "../lib/use-async-data";
 import { ErrorPageFeedback, LoadingPageFeedback } from "./page-feedback";
 
@@ -29,6 +30,7 @@ type HomePageData = {
   characters: CharacterRecord[];
   factions: FactionRecord[];
   planets: PlanetRecord[];
+  searchResults: SearchResultRecord[];
   timeline: EventListResponse;
 };
 
@@ -64,6 +66,91 @@ function entityMetaLabel(entity: CharacterRecord | PlanetRecord | FactionRecord)
     return entity.region ?? "Planet record";
   }
   return "Faction record";
+}
+
+function searchResultHref(result: SearchResultRecord): Route {
+  if (result.entity_type === "event") {
+    return `/events/${result.slug}` as Route;
+  }
+  if (result.entity_type === "character") {
+    return `/characters/${result.slug}` as Route;
+  }
+  if (result.entity_type === "planet") {
+    return `/planets/${result.slug}` as Route;
+  }
+  return `/factions/${result.slug}` as Route;
+}
+
+function searchSectionTitle(query: string, total: number): string {
+  if (total === 0) {
+    return `No matches for "${query}"`;
+  }
+  return `${total} match${total === 1 ? "" : "es"} for "${query}"`;
+}
+
+function renderSearchResults(query: string, items: SearchResultRecord[]) {
+  const groupedResults = new Map<SearchResultRecord["entity_type"], SearchResultRecord[]>();
+  for (const item of items) {
+    const bucket = groupedResults.get(item.entity_type) ?? [];
+    bucket.push(item);
+    groupedResults.set(item.entity_type, bucket);
+  }
+
+  const orderedGroups: Array<[SearchResultRecord["entity_type"], string]> = [
+    ["event", "Events"],
+    ["character", "Characters"],
+    ["planet", "Planets"],
+    ["faction", "Factions"],
+  ];
+
+  return (
+    <section className="timeline-shell search-shell">
+      <header className="timeline-header search-header">
+        <div>
+          <p className="section-kicker">Search</p>
+          <h2>{searchSectionTitle(query, items.length)}</h2>
+        </div>
+        <p className="timeline-caption">
+          Browser-fetched from <code>/api/v1/search?q={query}</code> across events, characters,
+          planets, and factions.
+        </p>
+      </header>
+      {items.length === 0 ? (
+        <p className="detail-empty">
+          Try a character, event title, slug, faction, or world name.
+        </p>
+      ) : (
+        <div className="search-groups">
+          {orderedGroups.map(([entityType, label]) => {
+            const groupItems = groupedResults.get(entityType) ?? [];
+            if (groupItems.length === 0) {
+              return null;
+            }
+            return (
+              <section key={entityType} className="search-group">
+                <div className="search-group-header">
+                  <p className="section-kicker">{label}</p>
+                  <span className="search-count">{groupItems.length}</span>
+                </div>
+                <div className="search-grid">
+                  {groupItems.map((item) => (
+                    <Link key={`${item.entity_type}-${item.id}`} href={searchResultHref(item)} className="search-card">
+                      <div className="search-card-meta">
+                        <span>{item.entity_type}</span>
+                        <span>/{item.slug}</span>
+                      </div>
+                      <h3>{item.label}</h3>
+                      <p>{item.description ?? "No description available."}</p>
+                    </Link>
+                  ))}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
 }
 
 function renderEntityPreview(
@@ -115,10 +202,11 @@ export function HomePageClient({ initialSearchParams }: HomePageClientProps) {
   const era = parseText(initialSearchParams.era);
   const character = parseText(initialSearchParams.character);
   const location = parseText(initialSearchParams.location);
+  const searchQuery = parseText(initialSearchParams.q);
 
   const { data, error, isLoading } = useAsyncData<HomePageData>(
     async () => {
-      const [backendStatus, timeline, characters, planets, factions] = await Promise.all([
+      const [backendStatus, timeline, characters, planets, factions, searchResults] = await Promise.all([
         getBackendStatus(),
         getTimelineEvents({
           startYear,
@@ -132,6 +220,7 @@ export function HomePageClient({ initialSearchParams }: HomePageClientProps) {
         getCharacters(),
         getPlanets(),
         getFactions(),
+        searchQuery ? searchEntities(searchQuery, 12) : Promise.resolve([]),
       ]);
 
       return {
@@ -139,10 +228,11 @@ export function HomePageClient({ initialSearchParams }: HomePageClientProps) {
         characters,
         factions,
         planets,
+        searchResults,
         timeline,
       };
     },
-    [startYear, endYear, order, era, character, location],
+    [startYear, endYear, order, era, character, location, searchQuery],
   );
 
   const knownEras = useMemo(
@@ -192,6 +282,25 @@ export function HomePageClient({ initialSearchParams }: HomePageClientProps) {
             A timeline-first Star Wars explorer with event chronology, graph-aware filters,
             and browsable entity records for the major actors in the canon.
           </p>
+          <form className="search-bar" method="get">
+            <label className="search-field">
+              <span className="search-label">Archive search</span>
+              <input
+                type="search"
+                name="q"
+                defaultValue={searchQuery ?? ""}
+                placeholder="Search for Anakin, Order 66, Coruscant..."
+              />
+            </label>
+            <button type="submit" className="action-button">
+              Search archive
+            </button>
+            {searchQuery ? (
+              <Link href={"/" as Route} className="secondary-link">
+                Clear search
+              </Link>
+            ) : null}
+          </form>
           <nav className="hero-nav" aria-label="Primary">
             <Link href={"/events" as Route} className="secondary-link">
               Events
@@ -227,6 +336,8 @@ export function HomePageClient({ initialSearchParams }: HomePageClientProps) {
           </div>
         </div>
       </section>
+
+      {searchQuery ? renderSearchResults(searchQuery, data.searchResults) : null}
 
       <section className="timeline-shell">
         <header className="timeline-header">

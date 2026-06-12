@@ -5,6 +5,7 @@ from app.domain.entities.faction import Faction
 from app.domain.entities.node_reference import NodeReference
 from app.domain.entities.planet import Planet
 from app.domain.entities.relationship import Relationship
+from app.domain.entities.search_result import SearchResult
 from app.domain.enums import NodeType, RelationshipType
 from app.repositories.interfaces.character_repository import CharacterRepository
 from app.repositories.interfaces.event_repository import EventRepository
@@ -126,6 +127,7 @@ class FakeGraphRepository(GraphRepository):
         self.nodes_by_id = {node.id: node for node in (nodes or [])}
         self.relationships: list[Relationship] = []
         self.event_chronology_by_id: dict[str, tuple[int, int | None]] = {}
+        self.search_results: list[SearchResult] = []
 
     def get_node_reference(self, node_id: str) -> NodeReference | None:
         return self.nodes_by_id.get(node_id)
@@ -165,6 +167,18 @@ class FakeGraphRepository(GraphRepository):
 
     def get_event_chronology(self, event_id: str) -> tuple[int, int | None] | None:
         return self.event_chronology_by_id.get(event_id)
+
+    def search_entities(self, *, query: str, limit: int) -> list[SearchResult]:
+        normalized_query = query.casefold()
+        matches = [
+            item
+            for item in self.search_results
+            if normalized_query in item.label.casefold()
+            or normalized_query in item.slug.casefold()
+            or normalized_query in (item.description or "").casefold()
+        ]
+        matches.sort(key=lambda item: (item.label.casefold(), item.entity_type, item.slug.casefold()))
+        return matches[:limit]
 
     def create_relationship(self, relationship: Relationship) -> Relationship:
         self.relationships.append(relationship)

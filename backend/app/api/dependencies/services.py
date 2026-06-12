@@ -7,6 +7,7 @@ from app.engine.services.event_service import EventService
 from app.engine.services.faction_service import FactionService
 from app.engine.services.planet_service import PlanetService
 from app.engine.services.relationship_service import RelationshipService
+from app.engine.services.search_service import SearchService
 from app.repositories.neo4j.character_repository import Neo4jCharacterRepository
 from app.repositories.neo4j.event_repository import Neo4jEventRepository
 from app.repositories.neo4j.faction_repository import Neo4jFactionRepository
@@ -62,3 +63,9 @@ def get_relationship_service(
     repository: Neo4jGraphRepository = Depends(get_graph_repository),
 ) -> RelationshipService:
     return RelationshipService(graph_repository=repository)
+
+
+def get_search_service(
+    repository: Neo4jGraphRepository = Depends(get_graph_repository),
+) -> SearchService:
+    return SearchService(graph_repository=repository)

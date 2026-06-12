@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 
 from app.domain.entities.node_reference import NodeReference
 from app.domain.entities.relationship import Relationship
+from app.domain.entities.search_result import SearchResult
 
 
 class GraphRepository(ABC):
@@ -25,6 +26,10 @@ class GraphRepository(ABC):
 
     @abstractmethod
     def get_event_chronology(self, event_id: str) -> tuple[int, int | None] | None:
+        raise NotImplementedError
+
+    @abstractmethod
+    def search_entities(self, *, query: str, limit: int) -> list[SearchResult]:
         raise NotImplementedError
 
     @abstractmethod

@@ -13,6 +13,7 @@ Frontend:
 
 - `/events` timeline explorer
 - `/characters`, `/planets`, and `/factions` entity browsers
+- archive-wide search across events, characters, planets, and factions
 - timeline filters for chronology, order, era, character, and location
 - slug-based event detail pages at `/events/{slug}`
 - slug-based entity detail pages at `/characters/{slug}`, `/planets/{slug}`, and `/factions/{slug}`
@@ -44,6 +45,7 @@ scripts/   development and seed scripts
 - `GET /api/v1/events`
 - `GET /api/v1/events/{event_id}`
 - `GET /api/v1/events/by-slug/{slug}`
+- `GET /api/v1/search?q=anakin`
 - `GET /api/v1/characters`
 - `GET /api/v1/characters/by-slug/{slug}`
 - `GET /api/v1/planets`
@@ -123,6 +125,7 @@ The audit checks for:
 ### Useful Frontend Routes
 
 - timeline: `http://localhost:3000/events`
+- archive search example: `http://localhost:3000/?q=anakin`
 - detail page example: `http://localhost:3000/events/battle-of-yavin`
 - filtered timeline example: `http://localhost:3000/events?era=Age%20of%20Rebellion&order=asc`
 - character-filtered timeline example: `http://localhost:3000/?character=wilhuff-tarkin`
