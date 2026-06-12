@@ -2,6 +2,7 @@
 
 import type { Route } from "next";
 import Link from "next/link";
+import { useState } from "react";
 import { EventFocusGraph } from "./event-focus-graph";
 import {
   type EventRecord,
@@ -10,7 +11,9 @@ import {
   getEventCausalGraph,
   getEventConsequences,
   getEventDependencies,
+  getEventImpact,
   type CausalGraphResponse,
+  type EventImpactResponse,
 } from "../lib/holocron-api";
 import { useAsyncData } from "../lib/use-async-data";
 import { ErrorPageFeedback, LoadingPageFeedback } from "./page-feedback";
@@ -53,6 +56,7 @@ function renderEventList(items: EventRecord[], emptyLabel: string) {
 }
 
 export function EventDetailPageClient({ depth, slug }: EventDetailPageClientProps) {
+  const [isWhatIfEnabled, setIsWhatIfEnabled] = useState(false);
   const { data, error, isLoading } = useAsyncData<EventDetailData>(
     async () => {
       const event = await getEventBySlug(slug);
@@ -70,6 +74,20 @@ export function EventDetailPageClient({ depth, slug }: EventDetailPageClientProp
       };
     },
     [depth, slug],
+  );
+  const impactEventId = isWhatIfEnabled ? data?.event.id ?? null : null;
+  const {
+    data: impactData,
+    error: impactError,
+    isLoading: isImpactLoading,
+  } = useAsyncData<EventImpactResponse | null>(
+    async () => {
+      if (!impactEventId) {
+        return null;
+      }
+      return getEventImpact(impactEventId);
+    },
+    [impactEventId],
   );
 
   if (isLoading) {
@@ -129,7 +147,43 @@ export function EventDetailPageClient({ depth, slug }: EventDetailPageClientProp
       </section>
 
       <section className="timeline-shell graph-panel">
-        <EventFocusGraph graph={data.causalGraph} />
+        <div className="sandbox-toolbar">
+          <div>
+            <p className="section-kicker">Sandbox</p>
+            <h2>What-if simulation</h2>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={isWhatIfEnabled}
+            className={`what-if-toggle${isWhatIfEnabled ? " is-enabled" : ""}`}
+            onClick={() => setIsWhatIfEnabled((current) => !current)}
+          >
+            <span className="what-if-toggle-track">
+              <span className="what-if-toggle-thumb" />
+            </span>
+            <span className="what-if-toggle-copy">
+              {isWhatIfEnabled ? "What-if active" : "What-if off"}
+            </span>
+          </button>
+        </div>
+
+        <p className="timeline-caption sandbox-caption">
+          {isWhatIfEnabled
+            ? isImpactLoading
+              ? "Calculating which downstream events and links would fail if this event were altered."
+              : impactError
+                ? impactError
+                : `Altering this event would break ${impactData?.impacted_events.length ?? 0} downstream events across ${impactData?.broken_edges.length ?? 0} causal links.`
+            : "Toggle the sandbox to simulate removing this event from the timeline and inspect the broken downstream path."}
+        </p>
+
+        <EventFocusGraph
+          graph={data.causalGraph}
+          impact={impactData}
+          impactLoading={isImpactLoading}
+          simulateDisabled={isWhatIfEnabled}
+        />
       </section>
 
       <section className="detail-grid">

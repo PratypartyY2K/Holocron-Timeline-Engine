@@ -16,16 +16,20 @@ import ReactFlow, {
 import "reactflow/dist/style.css";
 
 import { CausalEdge } from "./causal-edge";
-import type { CausalGraphResponse, EventRecord } from "../lib/holocron-api";
+import type { CausalGraphResponse, EventImpactResponse, EventRecord } from "../lib/holocron-api";
 
 type EventFocusGraphProps = {
   graph: CausalGraphResponse;
+  impact?: EventImpactResponse | null;
+  impactLoading?: boolean;
+  simulateDisabled?: boolean;
 };
 
 type GraphNodeData = {
   label: ReactNode;
   slug: string;
   tone: "dependency" | "focus" | "consequence";
+  status: "normal" | "deactivated" | "broken";
 };
 
 const edgeTypes: EdgeTypes = {
@@ -70,8 +74,11 @@ function buildLabel(event: EventRecord): ReactNode {
 
 function buildGraph(
   graph: CausalGraphResponse,
+  impact: EventImpactResponse | null | undefined,
+  simulateDisabled: boolean,
 ): { nodes: Node<GraphNodeData>[]; edges: Edge[] } {
-  const nodesById = new Map(graph.nodes.map((node) => [node.id, node]));
+  const impactedNodeIds = new Set(impact?.impacted_events.map((item) => item.id) ?? []);
+  const brokenEdgeIds = new Set(impact?.broken_edges.map((item) => item.id) ?? []);
   const incoming = new Map<string, string[]>();
   const outgoing = new Map<string, string[]>();
   for (const edge of graph.edges) {
@@ -148,15 +155,23 @@ function buildGraph(
           : columnIndex < 0
             ? "dependency"
             : "consequence";
+      const status: GraphNodeData["status"] =
+        simulateDisabled && event.id === graph.focus_event_id
+          ? "deactivated"
+          : simulateDisabled && impactedNodeIds.has(event.id)
+            ? "broken"
+            : "normal";
 
       reactFlowNodes.push({
         id: event.id,
         type: "default",
         position: { x: 380 + columnIndex * 320, y: 40 + rowIndex * 128 },
+        className: `graph-node-shell graph-node-shell-${status}`,
         data: {
           label: buildLabel(event),
           slug: event.slug,
           tone,
+          status,
         },
         draggable: false,
       });
@@ -170,6 +185,13 @@ function buildGraph(
     type: "causal",
     markerEnd: { type: MarkerType.ArrowClosed },
     animated: false,
+    style:
+      simulateDisabled && brokenEdgeIds.has(edge.id)
+        ? {
+            stroke: "rgba(255, 114, 122, 0.92)",
+            strokeWidth: 2.4,
+          }
+        : undefined,
     data: {
       note: edge.note ?? "",
     },
@@ -178,7 +200,13 @@ function buildGraph(
   return { nodes: reactFlowNodes, edges: reactFlowEdges };
 }
 
-function nodeColor(tone: GraphNodeData["tone"]): string {
+function nodeColor(tone: GraphNodeData["tone"], status: GraphNodeData["status"]): string {
+  if (status === "broken") {
+    return "#ff727a";
+  }
+  if (status === "deactivated") {
+    return "#8893a3";
+  }
   if (tone === "focus") {
     return "#e9b44c";
   }
@@ -188,7 +216,12 @@ function nodeColor(tone: GraphNodeData["tone"]): string {
   return "#ff9ba7";
 }
 
-export function EventFocusGraph({ graph }: EventFocusGraphProps) {
+export function EventFocusGraph({
+  graph,
+  impact,
+  impactLoading = false,
+  simulateDisabled = false,
+}: EventFocusGraphProps) {
   const router = useRouter();
   const [hoveredNote, setHoveredNote] = useState<string | null>(null);
   const handleHoverNoteChange = useCallback((note: string | null) => {
@@ -202,7 +235,10 @@ export function EventFocusGraph({ graph }: EventFocusGraphProps) {
     [router],
   );
 
-  const reactFlowGraph = useMemo(() => buildGraph(graph), [graph]);
+  const reactFlowGraph = useMemo(
+    () => buildGraph(graph, impact, simulateDisabled),
+    [graph, impact, simulateDisabled],
+  );
 
   const edgesWithHoverData: Edge[] = useMemo(
     () =>
@@ -226,6 +262,11 @@ export function EventFocusGraph({ graph }: EventFocusGraphProps) {
         <p className="timeline-caption">
           Visualizing actual <code>CAUSES</code> edges within depth {graph.depth}. Nodes are laid
           out relative to the focus event rather than collapsed into a star.
+          {simulateDisabled
+            ? impactLoading
+              ? " Sandbox impact is loading."
+              : " Broken downstream nodes and links are highlighted in the graph."
+            : ""}
         </p>
       </div>
 
@@ -254,7 +295,12 @@ export function EventFocusGraph({ graph }: EventFocusGraphProps) {
           <MiniMap
             pannable
             zoomable
-            nodeColor={(node) => nodeColor((node.data as GraphNodeData).tone)}
+            nodeColor={(node) =>
+              nodeColor(
+                (node.data as GraphNodeData).tone,
+                (node.data as GraphNodeData).status,
+              )
+            }
             maskColor="rgba(5, 11, 18, 0.6)"
           />
           <Controls showInteractive={false} />
@@ -266,6 +312,7 @@ export function EventFocusGraph({ graph }: EventFocusGraphProps) {
         <span><i className="legend-dot legend-dependency" /> Dependencies</span>
         <span><i className="legend-dot legend-focus" /> Focus event</span>
         <span><i className="legend-dot legend-consequence" /> Consequences</span>
+        {simulateDisabled ? <span><i className="legend-dot legend-broken" /> Broken path</span> : null}
       </div>
     </div>
   );

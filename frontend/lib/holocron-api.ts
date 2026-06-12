@@ -64,6 +64,12 @@ export type CausalGraphResponse = {
   edges: CausalGraphEdgeRecord[];
 };
 
+export type EventImpactResponse = {
+  event_id: string;
+  impacted_events: EventRecord[];
+  broken_edges: CausalGraphEdgeRecord[];
+};
+
 export type TimelineQuery = {
   startYear?: number;
   endYear?: number;
@@ -358,4 +364,16 @@ export async function getEventCausalGraph(
   }
 
   return (await response.json()) as CausalGraphResponse;
+}
+
+export async function getEventImpact(eventId: string): Promise<EventImpactResponse> {
+  const response = await fetch(`${getApiBaseUrl()}/api/v1/events/${eventId}/impact`, {
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch impact for ${eventId}: ${response.status}`);
+  }
+
+  return (await response.json()) as EventImpactResponse;
 }

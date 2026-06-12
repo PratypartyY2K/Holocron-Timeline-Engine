@@ -649,6 +649,78 @@ body {
   padding: 1.5rem;
 }
 
+.sandbox-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.sandbox-caption {
+  margin-top: 0;
+  margin-bottom: 1rem;
+}
+
+.what-if-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.75rem 1rem;
+  border-radius: 999px;
+  border: 1px solid rgba(233, 180, 76, 0.18);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  cursor: pointer;
+  transition:
+    border-color 180ms ease,
+    background 180ms ease,
+    transform 180ms ease;
+}
+
+.what-if-toggle:hover {
+  border-color: rgba(233, 180, 76, 0.3);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.what-if-toggle.is-enabled {
+  border-color: rgba(255, 114, 122, 0.4);
+  background: rgba(255, 114, 122, 0.08);
+}
+
+.what-if-toggle-track {
+  position: relative;
+  width: 52px;
+  height: 30px;
+  border-radius: 999px;
+  background: rgba(136, 147, 163, 0.45);
+  transition: background 180ms ease;
+}
+
+.what-if-toggle.is-enabled .what-if-toggle-track {
+  background: rgba(255, 114, 122, 0.72);
+}
+
+.what-if-toggle-thumb {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: #f6f1e8;
+  transition: transform 180ms ease;
+}
+
+.what-if-toggle.is-enabled .what-if-toggle-thumb {
+  transform: translateX(22px);
+}
+
+.what-if-toggle-copy {
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
 .graph-shell {
   display: grid;
   gap: 1rem;
@@ -701,6 +773,20 @@ body {
   background: rgba(7, 12, 20, 0.92);
   color: var(--text);
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.24);
+}
+
+.graph-canvas .react-flow__node.graph-node-shell-deactivated {
+  border-color: rgba(136, 147, 163, 0.38);
+  background: rgba(56, 66, 79, 0.88);
+  color: rgba(246, 241, 232, 0.72);
+}
+
+.graph-canvas .react-flow__node.graph-node-shell-broken {
+  border-color: rgba(255, 114, 122, 0.4);
+  background:
+    linear-gradient(180deg, rgba(255, 114, 122, 0.16), rgba(7, 12, 20, 0.94)),
+    rgba(7, 12, 20, 0.92);
+  box-shadow: 0 18px 44px rgba(120, 18, 24, 0.32);
 }
 
 .graph-canvas .react-flow__node-default {
@@ -784,6 +870,10 @@ body {
   background: #ff9ba7;
 }
 
+.legend-broken {
+  background: #ff727a;
+}
+
 @media (max-width: 640px) {
   .hero {
     padding: 2rem;
@@ -833,5 +923,10 @@ body {
   .filter-bar,
   .detail-toolbar {
     grid-template-columns: 1fr;
+  }
+
+  .sandbox-toolbar {
+    flex-direction: column;
+    align-items: stretch;
   }
 }
