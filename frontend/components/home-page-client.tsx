@@ -2,10 +2,12 @@
 
 import type { Route } from "next";
 import Link from "next/link";
-import { useMemo } from "react";
+import { useRouter } from "next/navigation";
+import { useMemo, type FormEvent } from "react";
 import {
   type CharacterRecord,
   type FactionRecord,
+  formatChronologyInput,
   type PlanetRecord,
   formatChronology,
   formatEventRange,
@@ -14,6 +16,7 @@ import {
   getFactions,
   getPlanets,
   getTimelineEvents,
+  parseChronologyInput,
   type BackendStatus,
   type EventListResponse,
 } from "../lib/holocron-api";
@@ -37,14 +40,6 @@ type HomePageData = {
 function buildEraSummary(eras: Array<string | null>): string {
   const eraSet = new Set(eras.filter((era): era is string => Boolean(era)));
   return `${eraSet.size} eras mapped`;
-}
-
-function parseInteger(value: string | string[] | undefined): number | undefined {
-  if (typeof value !== "string" || value.trim() === "") {
-    return undefined;
-  }
-  const parsed = Number.parseInt(value, 10);
-  return Number.isNaN(parsed) ? undefined : parsed;
 }
 
 function parseOrder(value: string | string[] | undefined): "asc" | "desc" {
@@ -196,13 +191,54 @@ function renderEntityPreview(
 }
 
 export function HomePageClient({ initialSearchParams }: HomePageClientProps) {
-  const startYear = parseInteger(initialSearchParams.start_year);
-  const endYear = parseInteger(initialSearchParams.end_year);
+  const router = useRouter();
+  const startYear = parseChronologyInput(initialSearchParams.start_year);
+  const endYear = parseChronologyInput(initialSearchParams.end_year);
+  const startYearInput = formatChronologyInput(initialSearchParams.start_year);
+  const endYearInput = formatChronologyInput(initialSearchParams.end_year);
   const order = parseOrder(initialSearchParams.order);
   const era = parseText(initialSearchParams.era);
   const character = parseText(initialSearchParams.character);
   const location = parseText(initialSearchParams.location);
   const searchQuery = parseText(initialSearchParams.q);
+
+  function handleTimelineFilterSubmit(event: FormEvent<HTMLFormElement>): void {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const params = new URLSearchParams();
+    const startYearValue = formData.get("start_year");
+    const endYearValue = formData.get("end_year");
+    const orderValue = formData.get("order");
+    const eraValue = formData.get("era");
+    const characterValue = formData.get("character");
+    const locationValue = formData.get("location");
+    const queryValue = searchQuery ?? "";
+
+    if (typeof queryValue === "string" && queryValue.trim() !== "") {
+      params.set("q", queryValue);
+    }
+    if (typeof startYearValue === "string" && startYearValue.trim() !== "") {
+      params.set("start_year", startYearValue.trim());
+    }
+    if (typeof endYearValue === "string" && endYearValue.trim() !== "") {
+      params.set("end_year", endYearValue.trim());
+    }
+    if (typeof orderValue === "string" && orderValue.trim() !== "" && orderValue !== "asc") {
+      params.set("order", orderValue);
+    }
+    if (typeof eraValue === "string" && eraValue.trim() !== "") {
+      params.set("era", eraValue);
+    }
+    if (typeof characterValue === "string" && characterValue.trim() !== "") {
+      params.set("character", characterValue);
+    }
+    if (typeof locationValue === "string" && locationValue.trim() !== "") {
+      params.set("location", locationValue);
+    }
+
+    const query = params.toString();
+    router.push((query ? `/?${query}` : "/") as Route);
+  }
 
   const { data, error, isLoading } = useAsyncData<HomePageData>(
     async () => {
@@ -351,14 +387,28 @@ export function HomePageClient({ initialSearchParams }: HomePageClientProps) {
           </p>
         </header>
 
-        <form className="filter-bar filter-bar-wide" method="get">
+        <form
+          className="filter-bar filter-bar-wide"
+          method="get"
+          onSubmit={handleTimelineFilterSubmit}
+        >
           <label className="filter-field">
-            <span>Start year</span>
-            <input type="number" name="start_year" defaultValue={startYear} placeholder="-232" />
+            <span>Start chronology</span>
+            <input
+              type="text"
+              name="start_year"
+              defaultValue={startYearInput}
+              placeholder="32 BBY"
+            />
           </label>
           <label className="filter-field">
-            <span>End year</span>
-            <input type="number" name="end_year" defaultValue={endYear} placeholder="35" />
+            <span>End chronology</span>
+            <input
+              type="text"
+              name="end_year"
+              defaultValue={endYearInput}
+              placeholder="4 ABY"
+            />
           </label>
           <label className="filter-field">
             <span>Order</span>

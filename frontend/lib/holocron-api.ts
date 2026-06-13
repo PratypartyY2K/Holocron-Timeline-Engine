@@ -151,6 +151,46 @@ export function formatEventRange(startYear: number, endYear: number | null): str
   return `${formatChronology(startYear)} to ${formatChronology(endYear)}`;
 }
 
+export function parseChronologyInput(value: string | string[] | undefined): number | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  const normalized = value.trim().toUpperCase();
+  if (!normalized) {
+    return undefined;
+  }
+
+  const taggedMatch = normalized.match(/^(-?\d+(?:\.\d+)?)\s*(BBY|ABY)$/);
+  if (taggedMatch) {
+    const [, rawMagnitude, era] = taggedMatch;
+    const magnitude = Number.parseFloat(rawMagnitude);
+    if (Number.isNaN(magnitude)) {
+      return undefined;
+    }
+    const absoluteMagnitude = Math.abs(magnitude);
+    return era === "BBY" ? -absoluteMagnitude : absoluteMagnitude;
+  }
+
+  const numericValue = Number.parseFloat(normalized);
+  if (Number.isNaN(numericValue)) {
+    return undefined;
+  }
+  return numericValue;
+}
+
+export function formatChronologyInput(value: string | string[] | undefined): string {
+  if (typeof value === "string" && value.trim() !== "") {
+    return value;
+  }
+
+  const parsed = parseChronologyInput(value);
+  if (parsed === undefined) {
+    return "";
+  }
+  return formatChronology(parsed);
+}
+
 export async function getBackendStatus(): Promise<BackendStatus> {
   try {
     const response = await fetch(`${getApiBaseUrl()}/api/v1/health`, {
