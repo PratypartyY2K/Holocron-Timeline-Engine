@@ -20,6 +20,13 @@ ALLOWED_RELATIONSHIP_NODE_TYPES: dict[RelationshipType, set[tuple[NodeType, Node
     RelationshipType.MEMBER_OF: {(NodeType.CHARACTER, NodeType.FACTION)},
     RelationshipType.ALLIED_WITH: {(NodeType.FACTION, NodeType.FACTION)},
     RelationshipType.ENEMY_OF: {(NodeType.FACTION, NodeType.FACTION)},
+    RelationshipType.SETS_ALIVE_STATE: {(NodeType.EVENT, NodeType.CHARACTER)},
+    RelationshipType.SETS_CHARACTER_LOCATION: {(NodeType.EVENT, NodeType.PLANET)},
+    RelationshipType.SETS_PLANET_CONTROL: {(NodeType.EVENT, NodeType.FACTION)},
+    RelationshipType.SETS_ARTIFACT_LOCATION: {
+        (NodeType.EVENT, NodeType.CHARACTER),
+        (NodeType.EVENT, NodeType.PLANET),
+    },
 }
 
 CANONICAL_EDGE_TYPES: set[RelationshipType] = {
@@ -55,6 +62,8 @@ class RelationshipService:
         target_id = command.to_node_id
         if command.type is RelationshipType.CAUSES:
             self._validate_causes_relationship(source_id=source_id, target_id=target_id)
+        else:
+            self._validate_stateful_relationship(command=command)
 
         if command.type in CANONICAL_EDGE_TYPES and target_id < source_id:
             source_id, target_id = target_id, source_id
@@ -63,6 +72,8 @@ class RelationshipService:
             relationship_type=command.type.value,
             from_node_id=source_id,
             to_node_id=target_id,
+            subject_node_id=command.subject_node_id,
+            artifact_key=command.artifact_key,
         )
         if existing_relationship is not None:
             raise DuplicateEntityError(
@@ -75,6 +86,10 @@ class RelationshipService:
             from_node_id=source_id,
             to_node_id=target_id,
             note=command.note,
+            subject_node_id=command.subject_node_id,
+            artifact_key=command.artifact_key,
+            value_bool=command.value_bool,
+            value_text=command.value_text,
         )
         return self._graph_repository.create_relationship(relationship)
 
@@ -98,4 +113,35 @@ class RelationshipService:
             raise ChronologyError(
                 "CAUSES relationship ordering is impossible: "
                 f"source event starts after target event ({source_start_year} > {target_start_year})"
+            )
+
+    def _validate_stateful_relationship(self, command: CreateRelationshipCommand) -> None:
+        if command.type is RelationshipType.SETS_ALIVE_STATE and command.value_bool is None:
+            raise ValidationError("SETS_ALIVE_STATE requires value_bool")
+
+        if command.type is RelationshipType.SETS_CHARACTER_LOCATION:
+            self._require_subject(command.subject_node_id, "SETS_CHARACTER_LOCATION requires subject_node_id")
+            self._validate_subject_type(command.subject_node_id, NodeType.CHARACTER)
+
+        if command.type is RelationshipType.SETS_PLANET_CONTROL:
+            self._require_subject(command.subject_node_id, "SETS_PLANET_CONTROL requires subject_node_id")
+            self._validate_subject_type(command.subject_node_id, NodeType.PLANET)
+
+        if command.type is RelationshipType.SETS_ARTIFACT_LOCATION:
+            if command.artifact_key is None or not command.artifact_key.strip():
+                raise ValidationError("SETS_ARTIFACT_LOCATION requires artifact_key")
+
+    def _require_subject(self, subject_node_id: str | None, message: str) -> None:
+        if subject_node_id is None or not subject_node_id.strip():
+            raise ValidationError(message)
+
+    def _validate_subject_type(self, subject_node_id: str | None, expected_type: NodeType) -> None:
+        if subject_node_id is None:
+            raise ValidationError("subject_node_id is required")
+        node = self._graph_repository.get_node_reference(subject_node_id)
+        if node is None:
+            raise EntityNotFoundError(f"Node not found: {subject_node_id}")
+        if node.node_type is not expected_type:
+            raise UnsupportedRelationshipError(
+                f"Temporal mutation subject must be {expected_type}, got {node.node_type}"
             )

@@ -10,6 +10,10 @@ class CreateRelationshipRequest(BaseModel):
     from_node_id: str = Field(min_length=1)
     to_node_id: str = Field(min_length=1)
     note: str | None = Field(default=None, max_length=1000)
+    subject_node_id: str | None = Field(default=None, min_length=1)
+    artifact_key: str | None = Field(default=None, min_length=1, max_length=200)
+    value_bool: bool | None = None
+    value_text: str | None = Field(default=None, max_length=1000)
 
 
 class RelationshipResponse(BaseModel):
@@ -20,6 +24,9 @@ class RelationshipResponse(BaseModel):
     from_node_id: str
     to_node_id: str
     note: str | None
+    subject_node_id: str | None
+    artifact_key: str | None
+    value_bool: bool | None
+    value_text: str | None
     created_at: datetime
     updated_at: datetime
-

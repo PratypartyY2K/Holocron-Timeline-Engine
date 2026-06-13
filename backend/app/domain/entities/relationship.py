@@ -15,6 +15,9 @@ class Relationship:
     from_node_id: str
     to_node_id: str
     note: str | None
+    subject_node_id: str | None = None
+    artifact_key: str | None = None
+    value_bool: bool | None = None
+    value_text: str | None = None
     created_at: datetime = field(default_factory=utc_now)
     updated_at: datetime = field(default_factory=utc_now)
-

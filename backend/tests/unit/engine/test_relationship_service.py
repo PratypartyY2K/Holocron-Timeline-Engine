@@ -251,3 +251,46 @@ def test_create_causes_relationship_rejects_impossible_chronology() -> None:
                 note=None,
             )
         )
+
+
+def test_create_sets_planet_control_requires_planet_subject() -> None:
+    repository = FakeGraphRepository(
+        nodes=[
+            make_node("event-1", NodeType.EVENT),
+            make_node("planet-1", NodeType.PLANET),
+            make_node("faction-1", NodeType.FACTION),
+        ]
+    )
+    service = RelationshipService(repository)
+
+    relationship = service.create_relationship(
+        CreateRelationshipCommand(
+            type=RelationshipType.SETS_PLANET_CONTROL,
+            from_node_id="event-1",
+            to_node_id="faction-1",
+            subject_node_id="planet-1",
+            note="Control flips",
+        )
+    )
+
+    assert relationship.subject_node_id == "planet-1"
+
+
+def test_create_sets_alive_state_requires_boolean_value() -> None:
+    repository = FakeGraphRepository(
+        nodes=[
+            make_node("event-1", NodeType.EVENT),
+            make_node("char-1", NodeType.CHARACTER),
+        ]
+    )
+    service = RelationshipService(repository)
+
+    with pytest.raises(ValidationError, match="requires value_bool"):
+        service.create_relationship(
+            CreateRelationshipCommand(
+                type=RelationshipType.SETS_ALIVE_STATE,
+                from_node_id="event-1",
+                to_node_id="char-1",
+                note=None,
+            )
+        )

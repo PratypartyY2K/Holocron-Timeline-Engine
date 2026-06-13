@@ -17,6 +17,8 @@ class GraphRepository(ABC):
         relationship_type: str,
         from_node_id: str,
         to_node_id: str,
+        subject_node_id: str | None = None,
+        artifact_key: str | None = None,
     ) -> Relationship | None:
         raise NotImplementedError
 
@@ -34,4 +36,8 @@ class GraphRepository(ABC):
 
     @abstractmethod
     def create_relationship(self, relationship: Relationship) -> Relationship:
+        raise NotImplementedError
+
+    @abstractmethod
+    def list_state_mutations_before_event(self, *, event_id: str) -> list[Relationship]:
         raise NotImplementedError

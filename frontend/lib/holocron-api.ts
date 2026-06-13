@@ -70,6 +70,45 @@ export type EventImpactResponse = {
   broken_edges: CausalGraphEdgeRecord[];
 };
 
+export type UniverseCharacterStateRecord = {
+  id: string;
+  slug: string;
+  name: string;
+  is_alive: boolean;
+  location_planet_slug: string | null;
+  location_planet_name: string | null;
+};
+
+export type FactionControlStateRecord = {
+  planet_slug: string;
+  planet_name: string;
+  faction_slug: string;
+  faction_name: string;
+};
+
+export type ArtifactLocationStateRecord = {
+  artifact_key: string;
+  artifact_name: string;
+  holder_character_slug: string | null;
+  holder_character_name: string | null;
+  location_planet_slug: string | null;
+  location_planet_name: string | null;
+  note: string | null;
+};
+
+export type UniverseStateResponse = {
+  event_id: string;
+  event_slug: string;
+  event_title: string;
+  as_of_year: number;
+  prior_event_count: number;
+  projection_mode: string;
+  notes: string[];
+  characters: UniverseCharacterStateRecord[];
+  faction_control: FactionControlStateRecord[];
+  artifacts: ArtifactLocationStateRecord[];
+};
+
 export type TimelineQuery = {
   startYear?: number;
   endYear?: number;
@@ -257,6 +296,18 @@ export async function getEventBySlug(slug: string): Promise<EventRecord> {
   }
 
   return (await response.json()) as EventRecord;
+}
+
+export async function getEventUniverseState(eventId: string): Promise<UniverseStateResponse> {
+  const response = await fetch(`${getApiBaseUrl()}/api/v1/events/${eventId}/universe-state`, {
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch universe state for ${eventId}: ${response.status}`);
+  }
+
+  return (await response.json()) as UniverseStateResponse;
 }
 
 export async function getCharacters(): Promise<CharacterRecord[]> {

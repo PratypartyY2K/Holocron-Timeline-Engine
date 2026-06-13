@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, Query, status
 
-from app.api.dependencies.services import get_event_service
+from app.api.dependencies.services import get_event_service, get_universe_state_service
 from app.engine.dto import CreateEventCommand, ListEventsQuery
 from app.engine.services.event_service import EventService
+from app.engine.services.universe_state_service import UniverseStateService
 from app.schemas.events import (
     CausalGraphResponse,
     CreateEventRequest,
@@ -10,6 +11,7 @@ from app.schemas.events import (
     EventListResponse,
     EventResponse,
 )
+from app.schemas.universe_state import UniverseStateResponse
 
 router = APIRouter()
 
@@ -128,3 +130,11 @@ def get_event_impact(
         impacted_events=[EventResponse.model_validate(item) for item in impact.impacted_events],
         broken_edges=[edge for edge in impact.broken_edges],
     )
+
+
+@router.get("/{event_id}/universe-state", response_model=UniverseStateResponse)
+def get_universe_state(
+    event_id: str,
+    service: UniverseStateService = Depends(get_universe_state_service),
+) -> UniverseStateResponse:
+    return UniverseStateResponse.model_validate(service.get_state_before_event(event_id))

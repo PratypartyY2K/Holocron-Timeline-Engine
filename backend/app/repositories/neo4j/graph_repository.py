@@ -32,13 +32,29 @@ class Neo4jGraphRepository(GraphRepository):
         relationship_type: str,
         from_node_id: str,
         to_node_id: str,
+        subject_node_id: str | None = None,
+        artifact_key: str | None = None,
     ) -> Relationship | None:
-        query = f"""
-        MATCH (source {{id: $from_node_id}})-[r:{relationship_type} {{from_node_id: $from_node_id, to_node_id: $to_node_id}}]->(target {{id: $to_node_id}})
+        query = """
+        MATCH (source {id: $from_node_id})-[r]->(target {id: $to_node_id})
+        WHERE type(r) = $relationship_type
+          AND r.from_node_id = $from_node_id
+          AND r.to_node_id = $to_node_id
+          AND (($subject_node_id IS NULL AND r[$subject_key] IS NULL) OR r[$subject_key] = $subject_node_id)
+          AND (($artifact_key IS NULL AND r[$artifact_key_name] IS NULL) OR r[$artifact_key_name] = $artifact_key)
         RETURN properties(r) AS relationship
         """
         with self._driver.session(database=self._database) as session:
-            record = session.run(query, from_node_id=from_node_id, to_node_id=to_node_id).single()
+            record = session.run(
+                query,
+                relationship_type=relationship_type,
+                from_node_id=from_node_id,
+                to_node_id=to_node_id,
+                subject_node_id=subject_node_id,
+                artifact_key=artifact_key,
+                subject_key="subject_node_id",
+                artifact_key_name="artifact_key",
+            ).single()
         if record is None:
             return None
         return map_relationship_record(dict(record["relationship"]))
@@ -156,6 +172,10 @@ class Neo4jGraphRepository(GraphRepository):
             from_node_id: $from_node_id,
             to_node_id: $to_node_id,
             note: $note,
+            subject_node_id: $subject_node_id,
+            artifact_key: $artifact_key,
+            value_bool: $value_bool,
+            value_text: $value_text,
             created_at: datetime($created_at),
             updated_at: datetime($updated_at)
         }}]->(target)
@@ -174,9 +194,39 @@ class Neo4jGraphRepository(GraphRepository):
             from_node_id=relationship.from_node_id,
             to_node_id=relationship.to_node_id,
             note=relationship.note,
+            subject_node_id=relationship.subject_node_id,
+            artifact_key=relationship.artifact_key,
+            value_bool=relationship.value_bool,
+            value_text=relationship.value_text,
             created_at=relationship.created_at.isoformat(),
             updated_at=relationship.updated_at.isoformat(),
         ).single()
         if record is None:
             raise RuntimeError("Failed to create relationship")
         return dict(record["relationship"])
+
+    def list_state_mutations_before_event(self, *, event_id: str) -> list[Relationship]:
+        query = """
+        MATCH (focus:Event {id: $event_id})
+        MATCH (source:Event)-[r]->()
+        WHERE (
+            source.start_year < focus.start_year
+            OR (source.start_year = focus.start_year AND source.title < focus.title)
+            OR (source.start_year = focus.start_year AND source.title = focus.title AND source.id < focus.id)
+        )
+        AND type(r) IN $relationship_types
+        RETURN properties(r) AS relationship
+        ORDER BY source.start_year ASC, source.title ASC, source.id ASC, r.id ASC
+        """
+        with self._driver.session(database=self._database) as session:
+            result = session.run(
+                query,
+                event_id=event_id,
+                relationship_types=[
+                    "SETS_ALIVE_STATE",
+                    "SETS_CHARACTER_LOCATION",
+                    "SETS_PLANET_CONTROL",
+                    "SETS_ARTIFACT_LOCATION",
+                ],
+            )
+            return [map_relationship_record(dict(record["relationship"])) for record in result]

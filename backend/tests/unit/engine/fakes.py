@@ -148,12 +148,16 @@ class FakeGraphRepository(GraphRepository):
         relationship_type: str,
         from_node_id: str,
         to_node_id: str,
+        subject_node_id: str | None = None,
+        artifact_key: str | None = None,
     ) -> Relationship | None:
         for relationship in self.relationships:
             if (
                 relationship.type.value == relationship_type
                 and relationship.from_node_id == from_node_id
                 and relationship.to_node_id == to_node_id
+                and relationship.subject_node_id == subject_node_id
+                and relationship.artifact_key == artifact_key
             ):
                 return relationship
         return None
@@ -193,6 +197,30 @@ class FakeGraphRepository(GraphRepository):
     def create_relationship(self, relationship: Relationship) -> Relationship:
         self.relationships.append(relationship)
         return relationship
+
+    def list_state_mutations_before_event(self, *, event_id: str) -> list[Relationship]:
+        chronology = self.event_chronology_by_id.get(event_id)
+        if chronology is None:
+            return []
+        focus_start_year = chronology[0]
+        event_keys: dict[str, tuple[int, str]] = {}
+        for node_id, (start_year, _) in self.event_chronology_by_id.items():
+            event_keys[node_id] = (start_year, node_id)
+        items = [
+            relationship
+            for relationship in self.relationships
+            if relationship.type
+            in {
+                RelationshipType.SETS_ALIVE_STATE,
+                RelationshipType.SETS_CHARACTER_LOCATION,
+                RelationshipType.SETS_PLANET_CONTROL,
+                RelationshipType.SETS_ARTIFACT_LOCATION,
+            }
+            and relationship.from_node_id in event_keys
+            and event_keys[relationship.from_node_id][0] < focus_start_year
+        ]
+        items.sort(key=lambda item: (event_keys[item.from_node_id][0], item.from_node_id, item.id))
+        return items
 
 
 def make_node(node_id: str, node_type: NodeType) -> NodeReference:

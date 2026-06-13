@@ -6,12 +6,14 @@ import { useState } from "react";
 import { EventFocusGraph } from "./event-focus-graph";
 import {
   type EventRecord,
+  type UniverseStateResponse,
   formatEventRange,
   getEventBySlug,
   getEventCausalGraph,
   getEventConsequences,
   getEventDependencies,
   getEventImpact,
+  getEventUniverseState,
   type CausalGraphResponse,
   type EventImpactResponse,
 } from "../lib/holocron-api";
@@ -28,6 +30,7 @@ type EventDetailData = {
   consequences: EventRecord[];
   dependencies: EventRecord[];
   event: EventRecord;
+  universeState: UniverseStateResponse;
 };
 
 function renderEventList(items: EventRecord[], emptyLabel: string) {
@@ -65,12 +68,14 @@ export function EventDetailPageClient({ depth, slug }: EventDetailPageClientProp
         getEventConsequences(event.id, depth),
         getEventCausalGraph(event.id, depth),
       ]);
+      const universeState = await getEventUniverseState(event.id);
 
       return {
         causalGraph,
         consequences,
         dependencies,
         event,
+        universeState,
       };
     },
     [depth, slug],
@@ -187,6 +192,76 @@ export function EventDetailPageClient({ depth, slug }: EventDetailPageClientProp
       </section>
 
       <section className="detail-grid">
+        <section className="timeline-shell detail-panel detail-panel-full">
+          <header className="timeline-header detail-panel-header">
+            <div>
+              <p className="section-kicker">Universe State</p>
+              <h2>Tracked snapshot before this event</h2>
+            </div>
+            <p className="timeline-caption">
+              The backend projects tracked characters, planetary control, and artifact positions before
+              <code> /events/{data.event.slug}</code> begins.
+            </p>
+          </header>
+
+          <div className="universe-state-grid">
+            <section className="universe-state-card">
+              <h3>Tracked characters</h3>
+              <div className="universe-state-list">
+                {data.universeState.characters.map((character) => (
+                  <article key={character.id} className="universe-state-row">
+                    <div>
+                      <strong>{character.name}</strong>
+                      <p>
+                        {character.is_alive ? "Alive" : "Dead"}
+                        {character.location_planet_name ? ` · ${character.location_planet_name}` : ""}
+                      </p>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+
+            <section className="universe-state-card">
+              <h3>Planetary control</h3>
+              <div className="universe-state-list">
+                {data.universeState.faction_control.map((control) => (
+                  <article key={control.planet_slug} className="universe-state-row">
+                    <div>
+                      <strong>{control.planet_name}</strong>
+                      <p>{control.faction_name}</p>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+
+            <section className="universe-state-card">
+              <h3>Tracked artifacts</h3>
+              <div className="universe-state-list">
+                {data.universeState.artifacts.map((artifact) => (
+                  <article key={artifact.artifact_key} className="universe-state-row">
+                    <div>
+                      <strong>{artifact.artifact_name}</strong>
+                      <p>
+                        {artifact.holder_character_name ?? "Unknown holder"}
+                        {artifact.location_planet_name ? ` · ${artifact.location_planet_name}` : ""}
+                      </p>
+                      {artifact.note ? <span>{artifact.note}</span> : null}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          </div>
+
+          <div className="universe-state-notes">
+            {data.universeState.notes.map((note) => (
+              <p key={note}>{note}</p>
+            ))}
+          </div>
+        </section>
+
         <section className="timeline-shell detail-panel">
           <header className="timeline-header detail-panel-header">
             <div>

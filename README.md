@@ -32,6 +32,7 @@ Backend:
 - event creation and retrieval
 - character, planet, and faction creation and retrieval
 - relationship creation
+- temporal mutation creation through the relationship API
 - dependency and consequence traversal
 - causal graph endpoint for event-focused graph rendering
 - impact analysis endpoint for downstream breakage simulation
@@ -65,6 +66,7 @@ scripts/   development and seed scripts
 - `GET /api/v1/events/{event_id}/consequences?depth=N`
 - `GET /api/v1/events/{event_id}/causal-graph?depth=N`
 - `GET /api/v1/events/{event_id}/impact`
+- `GET /api/v1/events/{event_id}/universe-state`
 
 `GET /api/v1/events` now supports combined filters such as:
 
@@ -157,6 +159,52 @@ on demand, then uses the returned downstream events and broken `CAUSES` edges to
 - gray out the selected event as deactivated
 - mark downstream impacted events as broken
 - highlight the broken causal path directly in the React Flow graph
+
+### Temporal Mutations
+
+You do not need to open Neo4j Browser to author timeline state changes. Temporal mutations can be
+created through `POST /api/v1/graph/relationships` using the new event-authored mutation
+relationship types:
+
+- `SETS_ALIVE_STATE`
+- `SETS_CHARACTER_LOCATION`
+- `SETS_PLANET_CONTROL`
+- `SETS_ARTIFACT_LOCATION`
+
+Example payload for transferring planetary control:
+
+```json
+{
+  "type": "SETS_PLANET_CONTROL",
+  "from_node_id": "event-rise-empire",
+  "to_node_id": "faction-empire",
+  "subject_node_id": "planet-coruscant",
+  "note": "Imperial takeover of Coruscant"
+}
+```
+
+Example payload for recording a character death:
+
+```json
+{
+  "type": "SETS_ALIVE_STATE",
+  "from_node_id": "event-battle-yavin",
+  "to_node_id": "char-grand-moff-tarkin",
+  "value_bool": false,
+  "note": "Destroyed aboard the first Death Star"
+}
+```
+
+To backfill the current curated mutation catalog into Neo4j through the backend codepath, run:
+
+```bash
+cd backend
+python -m app.scripts.backfill_temporal_mutations --dry-run
+python -m app.scripts.backfill_temporal_mutations
+```
+
+The command uses the same repository and validation logic as the API. It is idempotent for the
+currently curated mutations and will skip duplicates that already exist in Neo4j.
 
 ### Graph Layout
 

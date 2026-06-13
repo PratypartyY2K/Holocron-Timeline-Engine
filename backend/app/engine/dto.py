@@ -45,6 +45,10 @@ class CreateRelationshipCommand:
     from_node_id: str
     to_node_id: str
     note: str | None
+    subject_node_id: str | None = None
+    artifact_key: str | None = None
+    value_bool: bool | None = None
+    value_text: str | None = None
 
 
 @dataclass(slots=True, frozen=True)

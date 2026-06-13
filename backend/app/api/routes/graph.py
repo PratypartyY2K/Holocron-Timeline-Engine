@@ -19,7 +19,10 @@ def create_relationship(
             from_node_id=request.from_node_id,
             to_node_id=request.to_node_id,
             note=request.note,
+            subject_node_id=request.subject_node_id,
+            artifact_key=request.artifact_key,
+            value_bool=request.value_bool,
+            value_text=request.value_text,
         )
     )
     return RelationshipResponse.model_validate(relationship)
-

@@ -90,6 +90,10 @@ def map_relationship_record(properties: dict[str, Any]) -> Relationship:
         from_node_id=cast(str, properties["from_node_id"]),
         to_node_id=cast(str, properties["to_node_id"]),
         note=cast(str | None, properties.get("note")),
+        subject_node_id=cast(str | None, properties.get("subject_node_id")),
+        artifact_key=cast(str | None, properties.get("artifact_key")),
+        value_bool=cast(bool | None, properties.get("value_bool")),
+        value_text=cast(str | None, properties.get("value_text")),
         created_at=_datetime_value(properties["created_at"]),
         updated_at=_datetime_value(properties["updated_at"]),
     )
