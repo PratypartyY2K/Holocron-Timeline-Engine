@@ -16,6 +16,7 @@ Frontend:
 - archive-wide search across events, characters, planets, and factions
 - character detail timelines driven by the character-specific timeline endpoint
 - timeline filters for chronology, order, era, character, and location
+- BBY/ABY chronology inputs that normalize Star Wars dates into signed years for filtering
 - slug-based event detail pages at `/events/{slug}`
 - slug-based entity detail pages at `/characters/{slug}`, `/planets/{slug}`, and `/factions/{slug}`
 - dependency and consequence panels with depth controls
@@ -141,6 +142,7 @@ The audit checks for:
 - character timeline example: `http://localhost:3000/characters/luke-skywalker`
 - detail page example: `http://localhost:3000/events/battle-of-yavin`
 - filtered timeline example: `http://localhost:3000/events?era=Age%20of%20Rebellion&order=asc`
+- chronology filter example: `http://localhost:3000/?start_year=32%20BBY&end_year=4%20ABY`
 - character-filtered timeline example: `http://localhost:3000/?character=wilhuff-tarkin`
 - location-filtered timeline example: `http://localhost:3000/?location=tatooine`
 - entity browser examples: `http://localhost:3000/characters`, `http://localhost:3000/planets`, `http://localhost:3000/factions`
@@ -162,6 +164,13 @@ The event detail causal graph uses `@dagrejs/dagre` to compute a cleaner React F
 multi-node timelines. The layout engine handles vertical spacing and overlap avoidance, while
 event chronology still determines the left-to-right column order so causal paths stay readable
 as the graph grows.
+
+### Chronology Filters
+
+Timeline filters accept Star Wars-native chronology strings such as `32 BBY`, `19 BBY`, and
+`4 ABY` instead of forcing users to think in signed integers. The frontend parses those values
+into normalized signed years before making API requests, so `32 BBY` becomes `-32`, `19 BBY`
+becomes `-19`, and `4 ABY` becomes `4` for consistent backend filtering and sort behavior.
 
 ## Local Installation
 
