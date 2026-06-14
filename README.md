@@ -24,7 +24,8 @@ Frontend:
 - automatic causal graph layout using `@dagrejs/dagre`
 - chronology-aware left-to-right graph positioning for complex event paths
 - interactive "What If?" sandbox toggle on event detail pages
-- broken-path simulation that deactivates the focus event and highlights impacted downstream nodes
+- Butterfly Effect simulation that swaps the causal graph into an alternate branch view
+- invalidated and unresolved downstream timeline states rendered directly in React Flow
 - browser-side data fetching for timeline, entity, and event detail API calls
 
 Backend:
@@ -36,6 +37,7 @@ Backend:
 - dependency and consequence traversal
 - causal graph endpoint for event-focused graph rendering
 - impact analysis endpoint for downstream breakage simulation
+- timeline break simulation endpoint for alternate branch propagation
 
 ## Repository Layout
 
@@ -66,6 +68,7 @@ scripts/   development and seed scripts
 - `GET /api/v1/events/{event_id}/consequences?depth=N`
 - `GET /api/v1/events/{event_id}/causal-graph?depth=N`
 - `GET /api/v1/events/{event_id}/impact`
+- `GET /api/v1/engine/simulate-break/{event_id}`
 - `GET /api/v1/events/{event_id}/universe-state`
 
 `GET /api/v1/events` now supports combined filters such as:
@@ -152,13 +155,20 @@ The audit checks for:
 
 ### What-If Sandbox
 
-On an event detail page, the Sandbox toggle activates a what-if simulation for the
-currently focused event. The frontend fetches `GET /api/v1/events/{event_id}/impact`
-on demand, then uses the returned downstream events and broken `CAUSES` edges to:
+On an event detail page, the Sandbox toggle activates a Butterfly Effect simulation for the
+currently focused event. The frontend fetches `GET /api/v1/engine/simulate-break/{event_id}`
+on demand and replaces the canonical React Flow data with the alternate branch response.
 
-- gray out the selected event as deactivated
-- mark downstream impacted events as broken
-- highlight the broken causal path directly in the React Flow graph
+The simulator:
+
+- topologically sorts the downstream `CAUSES` graph from the broken event
+- marks the selected event as `broken`
+- marks downstream events as `invalidated` when their required support chain collapses
+- marks downstream events as `unresolved` when some non-broken support still exists
+- namespaces simulated node and edge ids in the UI so the alternate graph does not overlap the canonical one during the toggle
+
+The older `GET /api/v1/events/{event_id}/impact` endpoint is still useful for impact summaries,
+but the What-if graph now renders from the simulation endpoint directly.
 
 ### Temporal Mutations
 
@@ -211,7 +221,9 @@ currently curated mutations and will skip duplicates that already exist in Neo4j
 The event detail causal graph uses `@dagrejs/dagre` to compute a cleaner React Flow layout for
 multi-node timelines. The layout engine handles vertical spacing and overlap avoidance, while
 event chronology still determines the left-to-right column order so causal paths stay readable
-as the graph grows.
+as the graph grows. In What-if mode, the frontend remounts React Flow with a simulated graph id
+namespace so alternate-branch nodes are treated as a distinct layout rather than reusing canonical
+render state.
 
 ### Chronology Filters
 
@@ -257,6 +269,13 @@ npm install
 ```bash
 cd backend
 pytest
+```
+
+Focused backend verification used during simulator work:
+
+```bash
+cd backend
+pytest tests/unit/engine/test_timeline_simulation_service.py tests/unit/engine/test_event_service.py
 ```
 
 Useful variants:
