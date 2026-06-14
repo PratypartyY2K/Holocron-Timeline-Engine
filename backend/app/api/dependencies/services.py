@@ -8,6 +8,7 @@ from app.engine.services.faction_service import FactionService
 from app.engine.services.planet_service import PlanetService
 from app.engine.services.relationship_service import RelationshipService
 from app.engine.services.search_service import SearchService
+from app.engine.services.timeline_simulation_service import TimelineSimulationService
 from app.engine.services.universe_state_service import UniverseStateService
 from app.repositories.neo4j.character_repository import Neo4jCharacterRepository
 from app.repositories.neo4j.event_repository import Neo4jEventRepository
@@ -70,6 +71,12 @@ def get_search_service(
     repository: Neo4jGraphRepository = Depends(get_graph_repository),
 ) -> SearchService:
     return SearchService(graph_repository=repository)
+
+
+def get_timeline_simulation_service(
+    repository: Neo4jEventRepository = Depends(get_event_repository),
+) -> TimelineSimulationService:
+    return TimelineSimulationService(event_repository=repository)
 
 
 def get_universe_state_service(

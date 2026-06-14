@@ -2,6 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from app.domain.enums import RelationshipType
+from app.domain.entities.timeline_break_simulation import TimelineNodeStatus
 
 
 class CreateEventRequest(BaseModel):
@@ -65,3 +66,19 @@ class EventImpactResponse(BaseModel):
     event_id: str
     impacted_events: list[EventResponse]
     broken_edges: list[CausalGraphEdgeResponse]
+
+
+class TimelineBreakSimulationNodeResponse(EventResponse):
+    status: TimelineNodeStatus
+    topological_rank: int
+    affected_by_event_ids: list[str]
+    surviving_dependency_count: int
+    broken_dependency_count: int
+    unresolved_dependency_count: int
+
+
+class TimelineBreakSimulationResponse(BaseModel):
+    broken_event_id: str
+    nodes: list[TimelineBreakSimulationNodeResponse]
+    edges: list[CausalGraphEdgeResponse]
+    topological_order: list[str]

@@ -3,6 +3,7 @@ from abc import ABC, abstractmethod
 from app.domain.entities.causal_graph import CausalGraph
 from app.domain.entities.event import Event
 from app.domain.entities.event_impact import EventImpact
+from app.domain.entities.timeline_break_simulation import TimelineBreakSimulationGraph
 
 
 class EventRepository(ABC):
@@ -48,4 +49,8 @@ class EventRepository(ABC):
 
     @abstractmethod
     def get_impact(self, event_id: str) -> EventImpact:
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_break_simulation_graph(self, event_id: str) -> TimelineBreakSimulationGraph:
         raise NotImplementedError

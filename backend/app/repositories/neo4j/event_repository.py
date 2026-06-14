@@ -6,6 +6,7 @@ from app.core.config import Settings
 from app.domain.entities.causal_graph import CausalGraph, CausalGraphEdge
 from app.domain.entities.event import Event
 from app.domain.entities.event_impact import EventImpact
+from app.domain.entities.timeline_break_simulation import TimelineBreakSimulationGraph
 from app.domain.enums import RelationshipType
 from app.repositories.interfaces.event_repository import EventRepository
 from app.repositories.neo4j.mappers import map_event_record
@@ -241,6 +242,68 @@ class Neo4jEventRepository(EventRepository):
             event_id=event_id,
             impacted_events=impacted_events,
             broken_edges=broken_edges,
+        )
+
+    def get_break_simulation_graph(self, event_id: str) -> TimelineBreakSimulationGraph:
+        downstream_ids_query = """
+        MATCH (:Event {id: $event_id})-[:CAUSES*1..]->(downstream:Event)
+        RETURN collect(DISTINCT downstream.id) AS downstream_ids
+        """
+        node_query = """
+        MATCH (e:Event)
+        WHERE e.id IN $node_ids
+        RETURN properties(e) AS event
+        """
+        edge_query = """
+        MATCH (source:Event)-[rel:CAUSES]->(target:Event)
+        WHERE source.id IN $simulation_ids AND target.id IN $simulation_ids
+        RETURN {
+            id: coalesce(rel.id, source.id + '->' + target.id),
+            source_id: source.id,
+            target_id: target.id,
+            type: coalesce(rel.type, 'CAUSES'),
+            note: rel.note
+        } AS edge
+        """
+        dependency_query = """
+        MATCH (source:Event)-[:CAUSES]->(target:Event)
+        WHERE target.id IN $downstream_ids
+        RETURN target.id AS target_id, collect(DISTINCT source.id) AS dependency_source_ids
+        """
+
+        with self._driver.session(database=self._database) as session:
+            downstream_ids_record = session.run(downstream_ids_query, event_id=event_id).single()
+            downstream_ids = [] if downstream_ids_record is None else list(downstream_ids_record["downstream_ids"])
+            simulation_ids = [event_id, *downstream_ids]
+
+            node_result = session.run(node_query, node_ids=simulation_ids)
+            edge_result = session.run(edge_query, simulation_ids=simulation_ids)
+            dependency_result = session.run(dependency_query, downstream_ids=downstream_ids)
+
+            downstream_events = [map_event_record(dict(record["event"])) for record in node_result]
+            internal_edges = [
+                CausalGraphEdge(
+                    id=record["edge"]["id"],
+                    source_id=record["edge"]["source_id"],
+                    target_id=record["edge"]["target_id"],
+                    type=RelationshipType(record["edge"]["type"]),
+                    note=record["edge"].get("note"),
+                )
+                for record in edge_result
+            ]
+            dependency_ids_by_event_id = {
+                record["target_id"]: list(record["dependency_source_ids"])
+                for record in dependency_result
+            }
+
+        downstream_events = [event for event in downstream_events if event.id != event_id]
+        downstream_events.sort(key=lambda item: (item.start_year, item.title, item.id))
+        internal_edges.sort(key=lambda item: (item.source_id, item.target_id, item.id))
+        return TimelineBreakSimulationGraph(
+            broken_event_id=event_id,
+            downstream_events=downstream_events,
+            internal_edges=internal_edges,
+            dependency_ids_by_event_id=dependency_ids_by_event_id,
         )
 
     @staticmethod

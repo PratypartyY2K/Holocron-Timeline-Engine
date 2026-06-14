@@ -7,6 +7,7 @@ from app.domain.entities.node_reference import NodeReference
 from app.domain.entities.planet import Planet
 from app.domain.entities.relationship import Relationship
 from app.domain.entities.search_result import SearchResult
+from app.domain.entities.timeline_break_simulation import TimelineBreakSimulationGraph
 from app.domain.enums import NodeType, RelationshipType
 from app.repositories.interfaces.character_repository import CharacterRepository
 from app.repositories.interfaces.event_repository import EventRepository
@@ -23,6 +24,7 @@ class FakeEventRepository(EventRepository):
         self.consequences: dict[str, list[Event]] = {}
         self.causal_graphs: dict[tuple[str, int], CausalGraph] = {}
         self.impacts: dict[str, EventImpact] = {}
+        self.break_simulation_graphs: dict[str, TimelineBreakSimulationGraph] = {}
         self.last_dependencies_depth: int | None = None
         self.last_consequences_depth: int | None = None
         self.last_causal_graph_depth: int | None = None
@@ -80,6 +82,9 @@ class FakeEventRepository(EventRepository):
 
     def get_impact(self, event_id: str) -> EventImpact:
         return self.impacts.get(event_id, EventImpact(event_id=event_id))
+
+    def get_break_simulation_graph(self, event_id: str) -> TimelineBreakSimulationGraph:
+        return self.break_simulation_graphs.get(event_id, TimelineBreakSimulationGraph(broken_event_id=event_id))
 
 
 class FakeCharacterRepository(CharacterRepository):
