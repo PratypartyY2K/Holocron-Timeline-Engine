@@ -70,6 +70,22 @@ export type EventImpactResponse = {
   broken_edges: CausalGraphEdgeRecord[];
 };
 
+export type TimelineBreakSimulationNodeRecord = EventRecord & {
+  status: "active" | "broken" | "invalidated" | "unresolved";
+  topological_rank: number;
+  affected_by_event_ids: string[];
+  surviving_dependency_count: number;
+  broken_dependency_count: number;
+  unresolved_dependency_count: number;
+};
+
+export type TimelineBreakSimulationResponse = {
+  broken_event_id: string;
+  nodes: TimelineBreakSimulationNodeRecord[];
+  edges: CausalGraphEdgeRecord[];
+  topological_order: string[];
+};
+
 export type UniverseCharacterStateRecord = {
   id: string;
   slug: string;
@@ -467,4 +483,18 @@ export async function getEventImpact(eventId: string): Promise<EventImpactRespon
   }
 
   return (await response.json()) as EventImpactResponse;
+}
+
+export async function simulateTimelineBreak(
+  eventId: string,
+): Promise<TimelineBreakSimulationResponse> {
+  const response = await fetch(`${getApiBaseUrl()}/api/v1/engine/simulate-break/${eventId}`, {
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to simulate break for ${eventId}: ${response.status}`);
+  }
+
+  return (await response.json()) as TimelineBreakSimulationResponse;
 }

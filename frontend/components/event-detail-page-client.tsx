@@ -12,10 +12,10 @@ import {
   getEventCausalGraph,
   getEventConsequences,
   getEventDependencies,
-  getEventImpact,
   getEventUniverseState,
   type CausalGraphResponse,
-  type EventImpactResponse,
+  simulateTimelineBreak,
+  type TimelineBreakSimulationResponse,
 } from "../lib/holocron-api";
 import { useAsyncData } from "../lib/use-async-data";
 import { ErrorPageFeedback, LoadingPageFeedback } from "./page-feedback";
@@ -82,18 +82,23 @@ export function EventDetailPageClient({ depth, slug }: EventDetailPageClientProp
   );
   const impactEventId = isWhatIfEnabled ? data?.event.id ?? null : null;
   const {
-    data: impactData,
-    error: impactError,
-    isLoading: isImpactLoading,
-  } = useAsyncData<EventImpactResponse | null>(
+    data: simulationData,
+    error: simulationError,
+    isLoading: isSimulationLoading,
+  } = useAsyncData<TimelineBreakSimulationResponse | null>(
     async () => {
       if (!impactEventId) {
         return null;
       }
-      return getEventImpact(impactEventId);
+      return simulateTimelineBreak(impactEventId);
     },
     [impactEventId],
   );
+
+  const invalidatedCount =
+    simulationData?.nodes.filter((node) => node.status === "invalidated").length ?? 0;
+  const unresolvedCount =
+    simulationData?.nodes.filter((node) => node.status === "unresolved").length ?? 0;
 
   if (isLoading) {
     return (
@@ -175,19 +180,19 @@ export function EventDetailPageClient({ depth, slug }: EventDetailPageClientProp
 
         <p className="timeline-caption sandbox-caption">
           {isWhatIfEnabled
-            ? isImpactLoading
-              ? "Calculating which downstream events and links would fail if this event were altered."
-              : impactError
-                ? impactError
-                : `Altering this event would break ${impactData?.impacted_events.length ?? 0} downstream events across ${impactData?.broken_edges.length ?? 0} causal links.`
+            ? isSimulationLoading
+              ? "Calculating the alternate downstream timeline after removing this event."
+              : simulationError
+                ? simulationError
+                : `The alternate branch marks ${invalidatedCount} events invalidated and ${unresolvedCount} unresolved across ${simulationData?.edges.length ?? 0} causal links.`
             : "Toggle the sandbox to simulate removing this event from the timeline and inspect the broken downstream path."}
         </p>
 
         <EventFocusGraph
           graph={data.causalGraph}
-          impact={impactData}
-          impactLoading={isImpactLoading}
-          simulateDisabled={isWhatIfEnabled}
+          simulation={simulationData}
+          simulationLoading={isSimulationLoading}
+          simulateEnabled={isWhatIfEnabled}
         />
       </section>
 

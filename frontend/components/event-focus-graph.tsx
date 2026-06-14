@@ -18,20 +18,25 @@ import ReactFlow, {
 import "reactflow/dist/style.css";
 
 import { CausalEdge } from "./causal-edge";
-import type { CausalGraphResponse, EventImpactResponse, EventRecord } from "../lib/holocron-api";
+import type {
+  CausalGraphResponse,
+  EventRecord,
+  TimelineBreakSimulationNodeRecord,
+  TimelineBreakSimulationResponse,
+} from "../lib/holocron-api";
 
 type EventFocusGraphProps = {
   graph: CausalGraphResponse;
-  impact?: EventImpactResponse | null;
-  impactLoading?: boolean;
-  simulateDisabled?: boolean;
+  simulation?: TimelineBreakSimulationResponse | null;
+  simulationLoading?: boolean;
+  simulateEnabled?: boolean;
 };
 
 type GraphNodeData = {
   label: ReactNode;
   slug: string;
   tone: "dependency" | "focus" | "consequence";
-  status: "normal" | "deactivated" | "broken";
+  status: "normal" | "deactivated" | "broken" | "invalidated" | "unresolved";
 };
 
 const edgeTypes: EdgeTypes = {
@@ -80,13 +85,14 @@ function buildLabel(event: EventRecord): ReactNode {
   );
 }
 
-function buildGraph(
+function toRenderedNodeId(nodeId: string, mode: "canonical" | "simulation"): string {
+  return mode === "simulation" ? `what-if:${nodeId}` : nodeId;
+}
+
+function buildCanonicalGraph(
   graph: CausalGraphResponse,
-  impact: EventImpactResponse | null | undefined,
-  simulateDisabled: boolean,
+  simulateEnabled: boolean,
 ): { nodes: Node<GraphNodeData>[]; edges: Edge[] } {
-  const impactedNodeIds = new Set(impact?.impacted_events.map((item) => item.id) ?? []);
-  const brokenEdgeIds = new Set(impact?.broken_edges.map((item) => item.id) ?? []);
   const incoming = new Map<string, string[]>();
   const outgoing = new Map<string, string[]>();
   for (const edge of graph.edges) {
@@ -133,20 +139,13 @@ function buildGraph(
 
   const reactFlowEdges: Edge[] = graph.edges.map((edge) => ({
     id: edge.id,
-    source: edge.source_id,
-    target: edge.target_id,
+    source: toRenderedNodeId(edge.source_id, "canonical"),
+    target: toRenderedNodeId(edge.target_id, "canonical"),
     type: "causal",
     markerEnd: { type: MarkerType.ArrowClosed },
     animated: false,
     sourcePosition: Position.Right,
     targetPosition: Position.Left,
-    style:
-      simulateDisabled && brokenEdgeIds.has(edge.id)
-        ? {
-            stroke: "rgba(255, 114, 122, 0.92)",
-            strokeWidth: 2.4,
-          }
-        : undefined,
     data: {
       note: edge.note ?? "",
     },
@@ -197,17 +196,12 @@ function buildGraph(
         : (dependencyDistance.get(event.id) ?? 0) < 0
           ? "dependency"
           : "consequence";
-    const status: GraphNodeData["status"] =
-      simulateDisabled && event.id === graph.focus_event_id
-        ? "deactivated"
-        : simulateDisabled && impactedNodeIds.has(event.id)
-          ? "broken"
-          : "normal";
+    const status: GraphNodeData["status"] = simulateEnabled ? "deactivated" : "normal";
     const layoutNode = dagreGraph.node(event.id);
     const chronologyColumn = chronologyColumnByYear.get(event.start_year) ?? 0;
 
     return {
-      id: event.id,
+      id: toRenderedNodeId(event.id, "canonical"),
       type: "default",
       position: {
         x: LAYOUT_MARGIN_X + chronologyColumn * CHRONOLOGY_COLUMN_GAP,
@@ -229,9 +223,197 @@ function buildGraph(
   return { nodes: reactFlowNodes, edges: reactFlowEdges };
 }
 
+function buildSimulationGraph(
+  simulation: TimelineBreakSimulationResponse,
+): { nodes: Node<GraphNodeData>[]; edges: Edge[] } {
+  const nodeById = new Map(simulation.nodes.map((node) => [node.id, node]));
+  const incoming = new Map<string, string[]>();
+  const outgoing = new Map<string, string[]>();
+  for (const edge of simulation.edges) {
+    const nextOutgoing = outgoing.get(edge.source_id) ?? [];
+    nextOutgoing.push(edge.target_id);
+    outgoing.set(edge.source_id, nextOutgoing);
+
+    const nextIncoming = incoming.get(edge.target_id) ?? [];
+    nextIncoming.push(edge.source_id);
+    incoming.set(edge.target_id, nextIncoming);
+  }
+
+  const dependencyDistance = new Map<string, number>([[simulation.broken_event_id, 0]]);
+  const dependencyQueue: string[] = [simulation.broken_event_id];
+  while (dependencyQueue.length > 0) {
+    const current = dependencyQueue.shift();
+    if (current === undefined) {
+      break;
+    }
+    const distance = dependencyDistance.get(current) ?? 0;
+    for (const parent of incoming.get(current) ?? []) {
+      if (!dependencyDistance.has(parent)) {
+        dependencyDistance.set(parent, distance - 1);
+        dependencyQueue.push(parent);
+      }
+    }
+  }
+
+  const consequenceDistance = new Map<string, number>([[simulation.broken_event_id, 0]]);
+  const consequenceQueue: string[] = [simulation.broken_event_id];
+  while (consequenceQueue.length > 0) {
+    const current = consequenceQueue.shift();
+    if (current === undefined) {
+      break;
+    }
+    const distance = consequenceDistance.get(current) ?? 0;
+    for (const child of outgoing.get(current) ?? []) {
+      if (!consequenceDistance.has(child)) {
+        consequenceDistance.set(child, distance + 1);
+        consequenceQueue.push(child);
+      }
+    }
+  }
+
+  const sortedNodes = [...simulation.nodes].sort((left, right) => {
+    if (left.topological_rank !== right.topological_rank) {
+      return left.topological_rank - right.topological_rank;
+    }
+    if (left.start_year !== right.start_year) {
+      return left.start_year - right.start_year;
+    }
+    return left.title.localeCompare(right.title);
+  });
+  const chronologyYears = Array.from(new Set(sortedNodes.map((event) => event.start_year))).sort(
+    (left, right) => left - right,
+  );
+  const chronologyColumnByYear = new Map(chronologyYears.map((year, index) => [year, index]));
+
+  const dagreGraph = new dagre.graphlib.Graph();
+  dagreGraph.setDefaultEdgeLabel(() => ({}));
+  dagreGraph.setGraph({
+    rankdir: "LR",
+    align: "UL",
+    nodesep: 52,
+    ranksep: 96,
+    edgesep: 30,
+    marginx: LAYOUT_MARGIN_X,
+    marginy: LAYOUT_MARGIN_Y,
+  });
+
+  for (const node of sortedNodes) {
+    dagreGraph.setNode(node.id, {
+      width: NODE_WIDTH,
+      height: NODE_HEIGHT,
+    });
+  }
+
+  for (const edge of simulation.edges) {
+    dagreGraph.setEdge(edge.source_id, edge.target_id);
+  }
+
+  dagre.layout(dagreGraph);
+
+  const reactFlowNodes: Node<GraphNodeData>[] = sortedNodes.map((event) => {
+    const tone: GraphNodeData["tone"] =
+      event.id === simulation.broken_event_id
+        ? "focus"
+        : (dependencyDistance.get(event.id) ?? 0) < 0
+          ? "dependency"
+          : "consequence";
+    const layoutNode = dagreGraph.node(event.id);
+    const chronologyColumn = chronologyColumnByYear.get(event.start_year) ?? 0;
+
+    return {
+      id: toRenderedNodeId(event.id, "simulation"),
+      type: "default",
+      position: {
+        x: LAYOUT_MARGIN_X + chronologyColumn * CHRONOLOGY_COLUMN_GAP,
+        y: layoutNode.y - NODE_HEIGHT / 2,
+      },
+      className: `graph-node-shell graph-node-shell-${toVisualStatus(event.status)}`,
+      sourcePosition: Position.Right,
+      targetPosition: Position.Left,
+      data: {
+        label: buildSimulationLabel(event, nodeById),
+        slug: event.slug,
+        tone,
+        status: toVisualStatus(event.status),
+      },
+      draggable: false,
+    };
+  });
+
+  const reactFlowEdges: Edge[] = simulation.edges.map((edge) => ({
+    id: `what-if:${edge.id}`,
+    source: toRenderedNodeId(edge.source_id, "simulation"),
+    target: toRenderedNodeId(edge.target_id, "simulation"),
+    type: "causal",
+    markerEnd: { type: MarkerType.ArrowClosed },
+    animated: false,
+    sourcePosition: Position.Right,
+    targetPosition: Position.Left,
+    style:
+      nodeById.get(edge.target_id)?.status === "invalidated"
+        ? {
+            stroke: "rgba(255, 114, 122, 0.92)",
+            strokeWidth: 2.4,
+          }
+        : nodeById.get(edge.target_id)?.status === "unresolved"
+          ? {
+              stroke: "rgba(136, 147, 163, 0.92)",
+              strokeWidth: 2,
+              strokeDasharray: "6 4",
+            }
+          : undefined,
+    data: {
+      note: edge.note ?? "",
+    },
+  }));
+
+  return { nodes: reactFlowNodes, edges: reactFlowEdges };
+}
+
+function buildSimulationLabel(
+  event: TimelineBreakSimulationNodeRecord,
+  nodeById: Map<string, TimelineBreakSimulationNodeRecord>,
+): ReactNode {
+  const affectedTitles = event.affected_by_event_ids
+    .map((eventId) => nodeById.get(eventId)?.title)
+    .filter((title): title is string => Boolean(title));
+
+  return (
+    <div className="graph-node">
+      <div className="graph-node-chronology">{eventChronology(event)}</div>
+      <div className="graph-node-title">{event.title}</div>
+      <div className="graph-node-era">{event.era ?? "Unclassified era"}</div>
+      <div className="graph-node-status">
+        {event.status === "broken"
+          ? "Removed event"
+          : event.status === "invalidated"
+            ? "Invalidated"
+            : event.status === "unresolved"
+              ? "Unresolved"
+              : "Active"}
+      </div>
+      {affectedTitles.length > 0 ? (
+        <div className="graph-node-meta">Depends on: {affectedTitles.join(", ")}</div>
+      ) : null}
+    </div>
+  );
+}
+
+function toVisualStatus(
+  status: TimelineBreakSimulationNodeRecord["status"],
+): GraphNodeData["status"] {
+  return status === "active" ? "normal" : status;
+}
+
 function nodeColor(tone: GraphNodeData["tone"], status: GraphNodeData["status"]): string {
   if (status === "broken") {
     return "#ff727a";
+  }
+  if (status === "invalidated") {
+    return "#ff727a";
+  }
+  if (status === "unresolved") {
+    return "#8893a3";
   }
   if (status === "deactivated") {
     return "#8893a3";
@@ -247,9 +429,9 @@ function nodeColor(tone: GraphNodeData["tone"], status: GraphNodeData["status"])
 
 export function EventFocusGraph({
   graph,
-  impact,
-  impactLoading = false,
-  simulateDisabled = false,
+  simulation,
+  simulationLoading = false,
+  simulateEnabled = false,
 }: EventFocusGraphProps) {
   const router = useRouter();
   const [hoveredNote, setHoveredNote] = useState<string | null>(null);
@@ -265,8 +447,18 @@ export function EventFocusGraph({
   );
 
   const reactFlowGraph = useMemo(
-    () => buildGraph(graph, impact, simulateDisabled),
-    [graph, impact, simulateDisabled],
+    () =>
+      simulateEnabled && simulation
+        ? buildSimulationGraph(simulation)
+        : buildCanonicalGraph(graph, simulateEnabled),
+    [graph, simulateEnabled, simulation],
+  );
+  const reactFlowKey = useMemo(
+    () =>
+      simulateEnabled && simulation
+        ? `simulation:${simulation.broken_event_id}:${simulation.nodes.length}:${simulation.edges.length}`
+        : `canonical:${graph.focus_event_id}:${graph.nodes.length}:${graph.edges.length}`,
+    [graph.edges.length, graph.focus_event_id, graph.nodes.length, simulateEnabled, simulation],
   );
 
   const edgesWithHoverData: Edge[] = useMemo(
@@ -291,10 +483,12 @@ export function EventFocusGraph({
         <p className="timeline-caption">
           Visualizing actual <code>CAUSES</code> edges within depth {graph.depth}. Nodes are laid
           out relative to the focus event rather than collapsed into a star.
-          {simulateDisabled
-            ? impactLoading
-              ? " Sandbox impact is loading."
-              : " Broken downstream nodes and links are highlighted in the graph."
+          {simulateEnabled
+            ? simulationLoading
+              ? " Alternate timeline is loading."
+              : simulation
+                ? " Simulated nodes are rendered as a separate alternate branch."
+                : " Preparing alternate timeline."
             : ""}
         </p>
       </div>
@@ -308,6 +502,7 @@ export function EventFocusGraph({
 
       <div className="graph-canvas">
         <ReactFlow
+          key={reactFlowKey}
           nodes={reactFlowGraph.nodes}
           edges={edgesWithHoverData}
           fitView
@@ -341,7 +536,8 @@ export function EventFocusGraph({
         <span><i className="legend-dot legend-dependency" /> Dependencies</span>
         <span><i className="legend-dot legend-focus" /> Focus event</span>
         <span><i className="legend-dot legend-consequence" /> Consequences</span>
-        {simulateDisabled ? <span><i className="legend-dot legend-broken" /> Broken path</span> : null}
+        {simulateEnabled ? <span><i className="legend-dot legend-broken" /> Invalidated / broken</span> : null}
+        {simulateEnabled ? <span><i className="legend-dot legend-unresolved" /> Unresolved</span> : null}
       </div>
     </div>
   );
