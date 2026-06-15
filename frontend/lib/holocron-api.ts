@@ -10,6 +10,8 @@ export type EventRecord = {
   dependency_count: number;
   centrality_score: number;
   source_refs: string[];
+  faction_slugs: string[];
+  faction_names: string[];
   created_at: string;
   updated_at: string;
 };

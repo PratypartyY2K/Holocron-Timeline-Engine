@@ -36,6 +36,8 @@ class EventResponse(BaseModel):
     dependency_count: int
     centrality_score: float
     source_refs: list[str]
+    faction_slugs: list[str]
+    faction_names: list[str]
     created_at: datetime
     updated_at: datetime
 

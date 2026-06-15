@@ -33,6 +33,8 @@ def map_event_record(properties: dict[str, Any]) -> Event:
         dependency_count=int(properties.get("dependency_count", 0) or 0),
         centrality_score=float(properties.get("centrality_score", 0.0) or 0.0),
         source_refs=list(cast(list[str] | None, properties.get("source_refs")) or []),
+        faction_slugs=list(cast(list[str] | None, properties.get("faction_slugs")) or []),
+        faction_names=list(cast(list[str] | None, properties.get("faction_names")) or []),
         created_at=_datetime_value(properties["created_at"]),
         updated_at=_datetime_value(properties["updated_at"]),
     )

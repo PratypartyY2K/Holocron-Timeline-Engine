@@ -57,6 +57,13 @@ class Neo4jEventRepository(EventRepository):
             RETURN count(DISTINCT outgoing) AS outgoing_degree
         }
         CALL {
+            WITH e
+            OPTIONAL MATCH (e)-[:INVOLVES]->(faction:Faction)
+            RETURN
+                collect(DISTINCT faction.slug) AS faction_slugs,
+                collect(DISTINCT faction.name) AS faction_names
+        }
+        CALL {
             MATCH (all_events:Event)
             RETURN count(all_events) AS total_events
         }
@@ -66,7 +73,9 @@ class Neo4jEventRepository(EventRepository):
             centrality_score: CASE
                 WHEN total_events <= 1 THEN 0.0
                 ELSE toFloat(incoming_degree + outgoing_degree) / toFloat(2 * (total_events - 1))
-            END
+            END,
+            faction_slugs: faction_slugs,
+            faction_names: faction_names
         } AS event
         """
         return self._get_one(query, {"event_id": event_id})
@@ -90,6 +99,13 @@ class Neo4jEventRepository(EventRepository):
             RETURN count(DISTINCT outgoing) AS outgoing_degree
         }
         CALL {
+            WITH e
+            OPTIONAL MATCH (e)-[:INVOLVES]->(faction:Faction)
+            RETURN
+                collect(DISTINCT faction.slug) AS faction_slugs,
+                collect(DISTINCT faction.name) AS faction_names
+        }
+        CALL {
             MATCH (all_events:Event)
             RETURN count(all_events) AS total_events
         }
@@ -99,7 +115,9 @@ class Neo4jEventRepository(EventRepository):
             centrality_score: CASE
                 WHEN total_events <= 1 THEN 0.0
                 ELSE toFloat(incoming_degree + outgoing_degree) / toFloat(2 * (total_events - 1))
-            END
+            END,
+            faction_slugs: faction_slugs,
+            faction_names: faction_names
         } AS event
         """
         return self._get_one(query, {"slug": slug})
@@ -145,6 +163,13 @@ class Neo4jEventRepository(EventRepository):
             RETURN count(DISTINCT outgoing) AS outgoing_degree
         }}
         CALL {{
+            WITH e
+            OPTIONAL MATCH (e)-[:INVOLVES]->(faction:Faction)
+            RETURN
+                collect(DISTINCT faction.slug) AS faction_slugs,
+                collect(DISTINCT faction.name) AS faction_names
+        }}
+        CALL {{
             MATCH (all_events:Event)
             RETURN count(all_events) AS total_events
         }}
@@ -154,7 +179,9 @@ class Neo4jEventRepository(EventRepository):
             centrality_score: CASE
                 WHEN total_events <= 1 THEN 0.0
                 ELSE toFloat(incoming_degree + outgoing_degree) / toFloat(2 * (total_events - 1))
-            END
+            END,
+            faction_slugs: faction_slugs,
+            faction_names: faction_names
         }} AS event
         """
         count_query = f"""
@@ -203,6 +230,13 @@ class Neo4jEventRepository(EventRepository):
             RETURN count(DISTINCT outgoing) AS outgoing_degree
         }}
         CALL {{
+            WITH source
+            OPTIONAL MATCH (source)-[:INVOLVES]->(faction:Faction)
+            RETURN
+                collect(DISTINCT faction.slug) AS faction_slugs,
+                collect(DISTINCT faction.name) AS faction_names
+        }}
+        CALL {{
             MATCH (all_events:Event)
             RETURN count(all_events) AS total_events
         }}
@@ -212,7 +246,9 @@ class Neo4jEventRepository(EventRepository):
             centrality_score: CASE
                 WHEN total_events <= 1 THEN 0.0
                 ELSE toFloat(incoming_degree + outgoing_degree) / toFloat(2 * (total_events - 1))
-            END
+            END,
+            faction_slugs: faction_slugs,
+            faction_names: faction_names
         }} AS event
         ORDER BY event.start_year ASC, event.title ASC
         """
@@ -239,6 +275,13 @@ class Neo4jEventRepository(EventRepository):
             RETURN count(DISTINCT outgoing) AS outgoing_degree
         }}
         CALL {{
+            WITH target
+            OPTIONAL MATCH (target)-[:INVOLVES]->(faction:Faction)
+            RETURN
+                collect(DISTINCT faction.slug) AS faction_slugs,
+                collect(DISTINCT faction.name) AS faction_names
+        }}
+        CALL {{
             MATCH (all_events:Event)
             RETURN count(all_events) AS total_events
         }}
@@ -248,7 +291,9 @@ class Neo4jEventRepository(EventRepository):
             centrality_score: CASE
                 WHEN total_events <= 1 THEN 0.0
                 ELSE toFloat(incoming_degree + outgoing_degree) / toFloat(2 * (total_events - 1))
-            END
+            END,
+            faction_slugs: faction_slugs,
+            faction_names: faction_names
         }} AS event
         ORDER BY event.start_year ASC, event.title ASC
         """
@@ -305,6 +350,13 @@ class Neo4jEventRepository(EventRepository):
             RETURN count(DISTINCT outgoing) AS outgoing_degree
         }
         CALL {
+            WITH e
+            OPTIONAL MATCH (e)-[:INVOLVES]->(faction:Faction)
+            RETURN
+                collect(DISTINCT faction.slug) AS faction_slugs,
+                collect(DISTINCT faction.name) AS faction_names
+        }
+        CALL {
             MATCH (all_events:Event)
             RETURN count(all_events) AS total_events
         }
@@ -314,7 +366,9 @@ class Neo4jEventRepository(EventRepository):
             centrality_score: CASE
                 WHEN total_events <= 1 THEN 0.0
                 ELSE toFloat(incoming_degree + outgoing_degree) / toFloat(2 * (total_events - 1))
-            END
+            END,
+            faction_slugs: faction_slugs,
+            faction_names: faction_names
         } AS event
         """
         with self._driver.session(database=self._database) as session:
@@ -384,6 +438,13 @@ class Neo4jEventRepository(EventRepository):
             RETURN count(DISTINCT outgoing) AS outgoing_degree
         }
         CALL {
+            WITH e
+            OPTIONAL MATCH (e)-[:INVOLVES]->(faction:Faction)
+            RETURN
+                collect(DISTINCT faction.slug) AS faction_slugs,
+                collect(DISTINCT faction.name) AS faction_names
+        }
+        CALL {
             MATCH (all_events:Event)
             RETURN count(all_events) AS total_events
         }
@@ -393,7 +454,9 @@ class Neo4jEventRepository(EventRepository):
             centrality_score: CASE
                 WHEN total_events <= 1 THEN 0.0
                 ELSE toFloat(incoming_degree + outgoing_degree) / toFloat(2 * (total_events - 1))
-            END
+            END,
+            faction_slugs: faction_slugs,
+            faction_names: faction_names
         } AS event
         """
         with self._driver.session(database=self._database) as session:

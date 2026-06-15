@@ -19,5 +19,7 @@ class Event:
     dependency_count: int = 0
     centrality_score: float = 0.0
     source_refs: list[str] = field(default_factory=list)
+    faction_slugs: list[str] = field(default_factory=list)
+    faction_names: list[str] = field(default_factory=list)
     created_at: datetime = field(default_factory=utc_now)
     updated_at: datetime = field(default_factory=utc_now)
