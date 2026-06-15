@@ -7,6 +7,8 @@ export type EventRecord = {
   end_year: number | null;
   era: string | null;
   canon_status: string | null;
+  dependency_count: number;
+  centrality_score: number;
   source_refs: string[];
   created_at: string;
   updated_at: string;

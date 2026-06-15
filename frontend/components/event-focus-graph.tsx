@@ -81,8 +81,15 @@ function buildLabel(event: EventRecord): ReactNode {
       <div className="graph-node-chronology">{eventChronology(event)}</div>
       <div className="graph-node-title">{event.title}</div>
       <div className="graph-node-era">{event.era ?? "Unclassified era"}</div>
+      <div className="graph-node-meta">
+        Importance {formatCentrality(event.centrality_score)} · {event.dependency_count} deps
+      </div>
     </div>
   );
+}
+
+function formatCentrality(value: number): string {
+  return value.toFixed(2);
 }
 
 function toRenderedNodeId(nodeId: string, mode: "canonical" | "simulation"): string {
@@ -391,6 +398,9 @@ function buildSimulationLabel(
             : event.status === "unresolved"
               ? "Unresolved"
               : "Active"}
+      </div>
+      <div className="graph-node-meta">
+        Importance {formatCentrality(event.centrality_score)} · {event.dependency_count} deps
       </div>
       {affectedTitles.length > 0 ? (
         <div className="graph-node-meta">Depends on: {affectedTitles.join(", ")}</div>

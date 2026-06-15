@@ -41,14 +41,66 @@ class Neo4jEventRepository(EventRepository):
     def get_by_id(self, event_id: str) -> Event | None:
         query = """
         MATCH (e:Event {id: $event_id})
-        RETURN properties(e) AS event
+        CALL {
+            WITH e
+            OPTIONAL MATCH (dependency:Event)-[:CAUSES*1..]->(e)
+            RETURN count(DISTINCT dependency) AS dependency_count
+        }
+        CALL {
+            WITH e
+            OPTIONAL MATCH (incoming:Event)-[:CAUSES]->(e)
+            RETURN count(DISTINCT incoming) AS incoming_degree
+        }
+        CALL {
+            WITH e
+            OPTIONAL MATCH (e)-[:CAUSES]->(outgoing:Event)
+            RETURN count(DISTINCT outgoing) AS outgoing_degree
+        }
+        CALL {
+            MATCH (all_events:Event)
+            RETURN count(all_events) AS total_events
+        }
+        RETURN e {
+            .*,
+            dependency_count: dependency_count,
+            centrality_score: CASE
+                WHEN total_events <= 1 THEN 0.0
+                ELSE toFloat(incoming_degree + outgoing_degree) / toFloat(2 * (total_events - 1))
+            END
+        } AS event
         """
         return self._get_one(query, {"event_id": event_id})
 
     def get_by_slug(self, slug: str) -> Event | None:
         query = """
         MATCH (e:Event {slug: $slug})
-        RETURN properties(e) AS event
+        CALL {
+            WITH e
+            OPTIONAL MATCH (dependency:Event)-[:CAUSES*1..]->(e)
+            RETURN count(DISTINCT dependency) AS dependency_count
+        }
+        CALL {
+            WITH e
+            OPTIONAL MATCH (incoming:Event)-[:CAUSES]->(e)
+            RETURN count(DISTINCT incoming) AS incoming_degree
+        }
+        CALL {
+            WITH e
+            OPTIONAL MATCH (e)-[:CAUSES]->(outgoing:Event)
+            RETURN count(DISTINCT outgoing) AS outgoing_degree
+        }
+        CALL {
+            MATCH (all_events:Event)
+            RETURN count(all_events) AS total_events
+        }
+        RETURN e {
+            .*,
+            dependency_count: dependency_count,
+            centrality_score: CASE
+                WHEN total_events <= 1 THEN 0.0
+                ELSE toFloat(incoming_degree + outgoing_degree) / toFloat(2 * (total_events - 1))
+            END
+        } AS event
         """
         return self._get_one(query, {"slug": slug})
 
@@ -77,7 +129,33 @@ class Neo4jEventRepository(EventRepository):
         ORDER BY e.start_year {direction}, e.title ASC
         SKIP $offset
         LIMIT $limit
-        RETURN collect(properties(e)) AS events
+        CALL {{
+            WITH e
+            OPTIONAL MATCH (dependency:Event)-[:CAUSES*1..]->(e)
+            RETURN count(DISTINCT dependency) AS dependency_count
+        }}
+        CALL {{
+            WITH e
+            OPTIONAL MATCH (incoming:Event)-[:CAUSES]->(e)
+            RETURN count(DISTINCT incoming) AS incoming_degree
+        }}
+        CALL {{
+            WITH e
+            OPTIONAL MATCH (e)-[:CAUSES]->(outgoing:Event)
+            RETURN count(DISTINCT outgoing) AS outgoing_degree
+        }}
+        CALL {{
+            MATCH (all_events:Event)
+            RETURN count(all_events) AS total_events
+        }}
+        RETURN e {{
+            .*,
+            dependency_count: dependency_count,
+            centrality_score: CASE
+                WHEN total_events <= 1 THEN 0.0
+                ELSE toFloat(incoming_degree + outgoing_degree) / toFloat(2 * (total_events - 1))
+            END
+        }} AS event
         """
         count_query = f"""
         MATCH (e:Event)
@@ -97,18 +175,45 @@ class Neo4jEventRepository(EventRepository):
             "offset": offset,
         }
         with self._driver.session(database=self._database) as session:
-            events_record = session.run(query, **params).single()
+            event_records = list(session.run(query, **params))
             count_record = session.run(count_query, **params).single()
-        if events_record is None or count_record is None:
+        if count_record is None:
             return [], 0
-        event_items = [map_event_record(item) for item in events_record["events"]]
+        event_items = [map_event_record(dict(record["event"])) for record in event_records]
         return event_items, int(count_record["total"])
 
     def list_dependencies(self, event_id: str, depth: int | None = None) -> list[Event]:
         relationship_pattern = self._causes_path_pattern(depth)
         query = f"""
         MATCH (source:Event)-[:CAUSES{relationship_pattern}]->(target:Event {{id: $event_id}})
-        RETURN DISTINCT properties(source) AS event
+        WITH DISTINCT source
+        CALL {{
+            WITH source
+            OPTIONAL MATCH (dependency:Event)-[:CAUSES*1..]->(source)
+            RETURN count(DISTINCT dependency) AS dependency_count
+        }}
+        CALL {{
+            WITH source
+            OPTIONAL MATCH (incoming:Event)-[:CAUSES]->(source)
+            RETURN count(DISTINCT incoming) AS incoming_degree
+        }}
+        CALL {{
+            WITH source
+            OPTIONAL MATCH (source)-[:CAUSES]->(outgoing:Event)
+            RETURN count(DISTINCT outgoing) AS outgoing_degree
+        }}
+        CALL {{
+            MATCH (all_events:Event)
+            RETURN count(all_events) AS total_events
+        }}
+        RETURN DISTINCT source {{
+            .*,
+            dependency_count: dependency_count,
+            centrality_score: CASE
+                WHEN total_events <= 1 THEN 0.0
+                ELSE toFloat(incoming_degree + outgoing_degree) / toFloat(2 * (total_events - 1))
+            END
+        }} AS event
         ORDER BY event.start_year ASC, event.title ASC
         """
         return self._list_events(query, {"event_id": event_id})
@@ -117,7 +222,34 @@ class Neo4jEventRepository(EventRepository):
         relationship_pattern = self._causes_path_pattern(depth)
         query = f"""
         MATCH (source:Event {{id: $event_id}})-[:CAUSES{relationship_pattern}]->(target:Event)
-        RETURN DISTINCT properties(target) AS event
+        WITH DISTINCT target
+        CALL {{
+            WITH target
+            OPTIONAL MATCH (dependency:Event)-[:CAUSES*1..]->(target)
+            RETURN count(DISTINCT dependency) AS dependency_count
+        }}
+        CALL {{
+            WITH target
+            OPTIONAL MATCH (incoming:Event)-[:CAUSES]->(target)
+            RETURN count(DISTINCT incoming) AS incoming_degree
+        }}
+        CALL {{
+            WITH target
+            OPTIONAL MATCH (target)-[:CAUSES]->(outgoing:Event)
+            RETURN count(DISTINCT outgoing) AS outgoing_degree
+        }}
+        CALL {{
+            MATCH (all_events:Event)
+            RETURN count(all_events) AS total_events
+        }}
+        RETURN DISTINCT target {{
+            .*,
+            dependency_count: dependency_count,
+            centrality_score: CASE
+                WHEN total_events <= 1 THEN 0.0
+                ELSE toFloat(incoming_degree + outgoing_degree) / toFloat(2 * (total_events - 1))
+            END
+        }} AS event
         ORDER BY event.start_year ASC, event.title ASC
         """
         return self._list_events(query, {"event_id": event_id})
@@ -157,7 +289,33 @@ class Neo4jEventRepository(EventRepository):
         node_query = """
         MATCH (e:Event)
         WHERE e.id IN $node_ids
-        RETURN properties(e) AS event
+        CALL {
+            WITH e
+            OPTIONAL MATCH (dependency:Event)-[:CAUSES*1..]->(e)
+            RETURN count(DISTINCT dependency) AS dependency_count
+        }
+        CALL {
+            WITH e
+            OPTIONAL MATCH (incoming:Event)-[:CAUSES]->(e)
+            RETURN count(DISTINCT incoming) AS incoming_degree
+        }
+        CALL {
+            WITH e
+            OPTIONAL MATCH (e)-[:CAUSES]->(outgoing:Event)
+            RETURN count(DISTINCT outgoing) AS outgoing_degree
+        }
+        CALL {
+            MATCH (all_events:Event)
+            RETURN count(all_events) AS total_events
+        }
+        RETURN e {
+            .*,
+            dependency_count: dependency_count,
+            centrality_score: CASE
+                WHEN total_events <= 1 THEN 0.0
+                ELSE toFloat(incoming_degree + outgoing_degree) / toFloat(2 * (total_events - 1))
+            END
+        } AS event
         """
         with self._driver.session(database=self._database) as session:
             edge_record = session.run(edge_query, event_id=event_id, depth=depth).single()
@@ -210,7 +368,33 @@ class Neo4jEventRepository(EventRepository):
         node_query = """
         MATCH (e:Event)
         WHERE e.id IN $node_ids
-        RETURN properties(e) AS event
+        CALL {
+            WITH e
+            OPTIONAL MATCH (dependency:Event)-[:CAUSES*1..]->(e)
+            RETURN count(DISTINCT dependency) AS dependency_count
+        }
+        CALL {
+            WITH e
+            OPTIONAL MATCH (incoming:Event)-[:CAUSES]->(e)
+            RETURN count(DISTINCT incoming) AS incoming_degree
+        }
+        CALL {
+            WITH e
+            OPTIONAL MATCH (e)-[:CAUSES]->(outgoing:Event)
+            RETURN count(DISTINCT outgoing) AS outgoing_degree
+        }
+        CALL {
+            MATCH (all_events:Event)
+            RETURN count(all_events) AS total_events
+        }
+        RETURN e {
+            .*,
+            dependency_count: dependency_count,
+            centrality_score: CASE
+                WHEN total_events <= 1 THEN 0.0
+                ELSE toFloat(incoming_degree + outgoing_degree) / toFloat(2 * (total_events - 1))
+            END
+        } AS event
         """
         with self._driver.session(database=self._database) as session:
             edge_record = session.run(edge_query, event_id=event_id).single()

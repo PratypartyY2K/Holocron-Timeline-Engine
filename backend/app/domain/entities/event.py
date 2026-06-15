@@ -16,7 +16,8 @@ class Event:
     end_year: int | None
     era: str | None
     canon_status: str | None
+    dependency_count: int = 0
+    centrality_score: float = 0.0
     source_refs: list[str] = field(default_factory=list)
     created_at: datetime = field(default_factory=utc_now)
     updated_at: datetime = field(default_factory=utc_now)
-

@@ -30,6 +30,8 @@ def map_event_record(properties: dict[str, Any]) -> Event:
         end_year=cast(int | None, properties.get("end_year")),
         era=cast(str | None, properties.get("era")),
         canon_status=cast(str | None, properties.get("canon_status")),
+        dependency_count=int(properties.get("dependency_count", 0) or 0),
+        centrality_score=float(properties.get("centrality_score", 0.0) or 0.0),
         source_refs=list(cast(list[str] | None, properties.get("source_refs")) or []),
         created_at=_datetime_value(properties["created_at"]),
         updated_at=_datetime_value(properties["updated_at"]),

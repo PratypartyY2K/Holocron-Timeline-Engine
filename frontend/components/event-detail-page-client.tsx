@@ -100,6 +100,8 @@ export function EventDetailPageClient({ depth, slug }: EventDetailPageClientProp
   const unresolvedCount =
     simulationData?.nodes.filter((node) => node.status === "unresolved").length ?? 0;
 
+  const eventImportance = data?.event.centrality_score.toFixed(2) ?? "0.00";
+
   if (isLoading) {
     return (
       <LoadingPageFeedback
@@ -146,7 +148,15 @@ export function EventDetailPageClient({ depth, slug }: EventDetailPageClientProp
             <strong>{data.event.source_refs.length > 0 ? data.event.source_refs.join(", ") : "No sources"}</strong>
           </div>
           <div className="stat-card">
-            <span className="stat-label">Dependencies</span>
+            <span className="stat-label">Dependency weight</span>
+            <strong>{data.event.dependency_count} total upstream events</strong>
+          </div>
+          <div className="stat-card">
+            <span className="stat-label">Importance</span>
+            <strong>{eventImportance} centrality</strong>
+          </div>
+          <div className="stat-card">
+            <span className="stat-label">Visible dependencies</span>
             <strong>{data.dependencies.length} within depth {depth}</strong>
           </div>
           <div className="stat-card">

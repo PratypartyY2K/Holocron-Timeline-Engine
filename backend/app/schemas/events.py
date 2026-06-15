@@ -33,6 +33,8 @@ class EventResponse(BaseModel):
     end_year: int | None
     era: str | None
     canon_status: str | None
+    dependency_count: int
+    centrality_score: float
     source_refs: list[str]
     created_at: datetime
     updated_at: datetime
