@@ -20,12 +20,15 @@ Frontend:
 - slug-based event detail pages at `/events/{slug}`
 - slug-based entity detail pages at `/characters/{slug}`, `/planets/{slug}`, and `/factions/{slug}`
 - dependency and consequence panels with depth controls
-- React Flow causal graph with node click navigation
+- React Flow causal graph with path tracing, node coloring controls, and node navigation
 - automatic causal graph layout using `@dagrejs/dagre`
 - chronology-aware left-to-right graph positioning for complex event paths
 - interactive "What If?" sandbox toggle on event detail pages
 - Butterfly Effect simulation that swaps the causal graph into an alternate branch view
 - invalidated and unresolved downstream timeline states rendered directly in React Flow
+- event graph coloring by graph tone, era, and involved faction
+- main archive timeline zoomed and grouped by year or decade
+- universe-state snapshot cards with linked character, faction, and planet detail pages
 - browser-side data fetching for timeline, entity, and event detail API calls
 
 Backend:
@@ -153,6 +156,16 @@ The audit checks for:
 - entity browser examples: `http://localhost:3000/characters`, `http://localhost:3000/planets`, `http://localhost:3000/factions`
 - depth example: `http://localhost:3000/events/battle-of-yavin?depth=2`
 
+### Timeline UX
+
+The main archive timeline now supports frontend-only zoom/grouping modes:
+
+- `Year view` groups events by exact chronology buckets
+- `Decade view` groups events into decade bands while preserving the filtered event list
+
+This works on top of the existing `GET /api/v1/events` payload and does not require a full-page
+reload to move between zoom levels.
+
 ### What-If Sandbox
 
 On an event detail page, the Sandbox toggle activates a Butterfly Effect simulation for the
@@ -169,6 +182,14 @@ The simulator:
 
 The older `GET /api/v1/events/{event_id}/impact` endpoint is still useful for impact summaries,
 but the What-if graph now renders from the simulation endpoint directly.
+
+The event detail experience also now includes:
+
+- local dependency depth updates without reloading the full event page
+- linked universe-state snapshot entities for tracked characters, planets, and factions
+- graph path tracing between two selected nodes
+- double-click node navigation into the selected event
+- node coloring controls for graph tone, era, and faction involvement
 
 ### Temporal Mutations
 
@@ -223,7 +244,8 @@ multi-node timelines. The layout engine handles vertical spacing and overlap avo
 event chronology still determines the left-to-right column order so causal paths stay readable
 as the graph grows. In What-if mode, the frontend remounts React Flow with a simulated graph id
 namespace so alternate-branch nodes are treated as a distinct layout rather than reusing canonical
-render state.
+render state. The graph layer also supports click-to-anchor path highlighting and visual coloring
+by era or faction to make dense event networks easier to inspect.
 
 ### Chronology Filters
 
