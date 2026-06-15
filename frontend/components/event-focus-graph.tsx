@@ -3,7 +3,7 @@
 import type { Route } from "next";
 import dagre from "@dagrejs/dagre";
 import { useRouter } from "next/navigation";
-import { useCallback, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
 import ReactFlow, {
   Background,
   Controls,
@@ -20,6 +20,7 @@ import "reactflow/dist/style.css";
 import { CausalEdge } from "./causal-edge";
 import type {
   CausalGraphResponse,
+  CausalGraphEdgeRecord,
   EventRecord,
   TimelineBreakSimulationNodeRecord,
   TimelineBreakSimulationResponse,
@@ -32,11 +33,34 @@ type EventFocusGraphProps = {
   simulateEnabled?: boolean;
 };
 
+type GraphColorMode = "tone" | "era" | "faction";
+type GraphMode = "canonical" | "simulation";
+
 type GraphNodeData = {
   label: ReactNode;
   slug: string;
   tone: "dependency" | "focus" | "consequence";
   status: "normal" | "deactivated" | "broken" | "invalidated" | "unresolved";
+};
+
+type GraphSourceNode = EventRecord | TimelineBreakSimulationNodeRecord;
+
+type GraphSource = {
+  brokenEventId?: string;
+  depth: number;
+  edges: CausalGraphEdgeRecord[];
+  nodes: GraphSourceNode[];
+};
+
+type GraphBuildResult = {
+  edges: Edge[];
+  nodes: Node<GraphNodeData>[];
+  renderedNodeIds: string[];
+};
+
+type PathSelection = {
+  edges: Set<string>;
+  nodes: Set<string>;
 };
 
 const edgeTypes: EdgeTypes = {
@@ -57,6 +81,16 @@ const NODE_HEIGHT = 104;
 const CHRONOLOGY_COLUMN_GAP = 320;
 const LAYOUT_MARGIN_X = 80;
 const LAYOUT_MARGIN_Y = 60;
+const GRAPH_ACCENT_PALETTE = [
+  "#e9b44c",
+  "#70c1b3",
+  "#ff9ba7",
+  "#9fb3ff",
+  "#f28482",
+  "#84a59d",
+  "#f6bd60",
+  "#b8de6f",
+];
 
 function formatChronology(year: number): string {
   if (year < 0) {
@@ -68,11 +102,15 @@ function formatChronology(year: number): string {
   return "0 ABY";
 }
 
-function eventChronology(event: EventRecord): string {
+function eventChronology(event: GraphSourceNode): string {
   if (event.end_year === null || event.end_year === event.start_year) {
     return formatChronology(event.start_year);
   }
   return `${formatChronology(event.start_year)} to ${formatChronology(event.end_year)}`;
+}
+
+function formatCentrality(value: number): string {
+  return value.toFixed(2);
 }
 
 function buildLabel(event: EventRecord): ReactNode {
@@ -84,297 +122,11 @@ function buildLabel(event: EventRecord): ReactNode {
       <div className="graph-node-meta">
         Importance {formatCentrality(event.centrality_score)} · {event.dependency_count} deps
       </div>
+      <div className="graph-node-meta">
+        {event.faction_names.length > 0 ? event.faction_names.join(", ") : "No faction tags"}
+      </div>
     </div>
   );
-}
-
-function formatCentrality(value: number): string {
-  return value.toFixed(2);
-}
-
-function toRenderedNodeId(nodeId: string, mode: "canonical" | "simulation"): string {
-  return mode === "simulation" ? `what-if:${nodeId}` : nodeId;
-}
-
-function buildCanonicalGraph(
-  graph: CausalGraphResponse,
-  simulateEnabled: boolean,
-): { nodes: Node<GraphNodeData>[]; edges: Edge[] } {
-  const incoming = new Map<string, string[]>();
-  const outgoing = new Map<string, string[]>();
-  for (const edge of graph.edges) {
-    const nextOutgoing = outgoing.get(edge.source_id) ?? [];
-    nextOutgoing.push(edge.target_id);
-    outgoing.set(edge.source_id, nextOutgoing);
-
-    const nextIncoming = incoming.get(edge.target_id) ?? [];
-    nextIncoming.push(edge.source_id);
-    incoming.set(edge.target_id, nextIncoming);
-  }
-
-  const dependencyDistance = new Map<string, number>([[graph.focus_event_id, 0]]);
-  const dependencyQueue: string[] = [graph.focus_event_id];
-  while (dependencyQueue.length > 0) {
-    const current = dependencyQueue.shift();
-    if (current === undefined) {
-      break;
-    }
-    const distance = dependencyDistance.get(current) ?? 0;
-    for (const parent of incoming.get(current) ?? []) {
-      if (!dependencyDistance.has(parent)) {
-        dependencyDistance.set(parent, distance - 1);
-        dependencyQueue.push(parent);
-      }
-    }
-  }
-
-  const consequenceDistance = new Map<string, number>([[graph.focus_event_id, 0]]);
-  const consequenceQueue: string[] = [graph.focus_event_id];
-  while (consequenceQueue.length > 0) {
-    const current = consequenceQueue.shift();
-    if (current === undefined) {
-      break;
-    }
-    const distance = consequenceDistance.get(current) ?? 0;
-    for (const child of outgoing.get(current) ?? []) {
-      if (!consequenceDistance.has(child)) {
-        consequenceDistance.set(child, distance + 1);
-        consequenceQueue.push(child);
-      }
-    }
-  }
-
-  const reactFlowEdges: Edge[] = graph.edges.map((edge) => ({
-    id: edge.id,
-    source: toRenderedNodeId(edge.source_id, "canonical"),
-    target: toRenderedNodeId(edge.target_id, "canonical"),
-    type: "causal",
-    markerEnd: { type: MarkerType.ArrowClosed },
-    animated: false,
-    sourcePosition: Position.Right,
-    targetPosition: Position.Left,
-    data: {
-      note: edge.note ?? "",
-    },
-  }));
-
-  const sortedEvents = [...graph.nodes].sort((left, right) => {
-    if (left.start_year !== right.start_year) {
-      return left.start_year - right.start_year;
-    }
-    return left.title.localeCompare(right.title);
-  });
-  const chronologyYears = Array.from(
-    new Set(sortedEvents.map((event) => event.start_year)),
-  ).sort((left, right) => left - right);
-  const chronologyColumnByYear = new Map(
-    chronologyYears.map((year, index) => [year, index]),
-  );
-
-  const dagreGraph = new dagre.graphlib.Graph();
-  dagreGraph.setDefaultEdgeLabel(() => ({}));
-  dagreGraph.setGraph({
-    rankdir: "LR",
-    align: "UL",
-    nodesep: 52,
-    ranksep: 96,
-    edgesep: 30,
-    marginx: LAYOUT_MARGIN_X,
-    marginy: LAYOUT_MARGIN_Y,
-  });
-
-  for (const event of sortedEvents) {
-    dagreGraph.setNode(event.id, {
-      width: NODE_WIDTH,
-      height: NODE_HEIGHT,
-    });
-  }
-
-  for (const edge of graph.edges) {
-    dagreGraph.setEdge(edge.source_id, edge.target_id);
-  }
-
-  dagre.layout(dagreGraph);
-
-  const reactFlowNodes: Node<GraphNodeData>[] = sortedEvents.map((event) => {
-    const tone: GraphNodeData["tone"] =
-      event.id === graph.focus_event_id
-        ? "focus"
-        : (dependencyDistance.get(event.id) ?? 0) < 0
-          ? "dependency"
-          : "consequence";
-    const status: GraphNodeData["status"] = simulateEnabled ? "deactivated" : "normal";
-    const layoutNode = dagreGraph.node(event.id);
-    const chronologyColumn = chronologyColumnByYear.get(event.start_year) ?? 0;
-
-    return {
-      id: toRenderedNodeId(event.id, "canonical"),
-      type: "default",
-      position: {
-        x: LAYOUT_MARGIN_X + chronologyColumn * CHRONOLOGY_COLUMN_GAP,
-        y: layoutNode.y - NODE_HEIGHT / 2,
-      },
-      className: `graph-node-shell graph-node-shell-${status}`,
-      sourcePosition: Position.Right,
-      targetPosition: Position.Left,
-      data: {
-        label: buildLabel(event),
-        slug: event.slug,
-        tone,
-        status,
-      },
-      draggable: false,
-    };
-  });
-
-  return { nodes: reactFlowNodes, edges: reactFlowEdges };
-}
-
-function buildSimulationGraph(
-  simulation: TimelineBreakSimulationResponse,
-): { nodes: Node<GraphNodeData>[]; edges: Edge[] } {
-  const nodeById = new Map(simulation.nodes.map((node) => [node.id, node]));
-  const incoming = new Map<string, string[]>();
-  const outgoing = new Map<string, string[]>();
-  for (const edge of simulation.edges) {
-    const nextOutgoing = outgoing.get(edge.source_id) ?? [];
-    nextOutgoing.push(edge.target_id);
-    outgoing.set(edge.source_id, nextOutgoing);
-
-    const nextIncoming = incoming.get(edge.target_id) ?? [];
-    nextIncoming.push(edge.source_id);
-    incoming.set(edge.target_id, nextIncoming);
-  }
-
-  const dependencyDistance = new Map<string, number>([[simulation.broken_event_id, 0]]);
-  const dependencyQueue: string[] = [simulation.broken_event_id];
-  while (dependencyQueue.length > 0) {
-    const current = dependencyQueue.shift();
-    if (current === undefined) {
-      break;
-    }
-    const distance = dependencyDistance.get(current) ?? 0;
-    for (const parent of incoming.get(current) ?? []) {
-      if (!dependencyDistance.has(parent)) {
-        dependencyDistance.set(parent, distance - 1);
-        dependencyQueue.push(parent);
-      }
-    }
-  }
-
-  const consequenceDistance = new Map<string, number>([[simulation.broken_event_id, 0]]);
-  const consequenceQueue: string[] = [simulation.broken_event_id];
-  while (consequenceQueue.length > 0) {
-    const current = consequenceQueue.shift();
-    if (current === undefined) {
-      break;
-    }
-    const distance = consequenceDistance.get(current) ?? 0;
-    for (const child of outgoing.get(current) ?? []) {
-      if (!consequenceDistance.has(child)) {
-        consequenceDistance.set(child, distance + 1);
-        consequenceQueue.push(child);
-      }
-    }
-  }
-
-  const sortedNodes = [...simulation.nodes].sort((left, right) => {
-    if (left.topological_rank !== right.topological_rank) {
-      return left.topological_rank - right.topological_rank;
-    }
-    if (left.start_year !== right.start_year) {
-      return left.start_year - right.start_year;
-    }
-    return left.title.localeCompare(right.title);
-  });
-  const chronologyYears = Array.from(new Set(sortedNodes.map((event) => event.start_year))).sort(
-    (left, right) => left - right,
-  );
-  const chronologyColumnByYear = new Map(chronologyYears.map((year, index) => [year, index]));
-
-  const dagreGraph = new dagre.graphlib.Graph();
-  dagreGraph.setDefaultEdgeLabel(() => ({}));
-  dagreGraph.setGraph({
-    rankdir: "LR",
-    align: "UL",
-    nodesep: 52,
-    ranksep: 96,
-    edgesep: 30,
-    marginx: LAYOUT_MARGIN_X,
-    marginy: LAYOUT_MARGIN_Y,
-  });
-
-  for (const node of sortedNodes) {
-    dagreGraph.setNode(node.id, {
-      width: NODE_WIDTH,
-      height: NODE_HEIGHT,
-    });
-  }
-
-  for (const edge of simulation.edges) {
-    dagreGraph.setEdge(edge.source_id, edge.target_id);
-  }
-
-  dagre.layout(dagreGraph);
-
-  const reactFlowNodes: Node<GraphNodeData>[] = sortedNodes.map((event) => {
-    const tone: GraphNodeData["tone"] =
-      event.id === simulation.broken_event_id
-        ? "focus"
-        : (dependencyDistance.get(event.id) ?? 0) < 0
-          ? "dependency"
-          : "consequence";
-    const layoutNode = dagreGraph.node(event.id);
-    const chronologyColumn = chronologyColumnByYear.get(event.start_year) ?? 0;
-
-    return {
-      id: toRenderedNodeId(event.id, "simulation"),
-      type: "default",
-      position: {
-        x: LAYOUT_MARGIN_X + chronologyColumn * CHRONOLOGY_COLUMN_GAP,
-        y: layoutNode.y - NODE_HEIGHT / 2,
-      },
-      className: `graph-node-shell graph-node-shell-${toVisualStatus(event.status)}`,
-      sourcePosition: Position.Right,
-      targetPosition: Position.Left,
-      data: {
-        label: buildSimulationLabel(event, nodeById),
-        slug: event.slug,
-        tone,
-        status: toVisualStatus(event.status),
-      },
-      draggable: false,
-    };
-  });
-
-  const reactFlowEdges: Edge[] = simulation.edges.map((edge) => ({
-    id: `what-if:${edge.id}`,
-    source: toRenderedNodeId(edge.source_id, "simulation"),
-    target: toRenderedNodeId(edge.target_id, "simulation"),
-    type: "causal",
-    markerEnd: { type: MarkerType.ArrowClosed },
-    animated: false,
-    sourcePosition: Position.Right,
-    targetPosition: Position.Left,
-    style:
-      nodeById.get(edge.target_id)?.status === "invalidated"
-        ? {
-            stroke: "rgba(255, 114, 122, 0.92)",
-            strokeWidth: 2.4,
-          }
-        : nodeById.get(edge.target_id)?.status === "unresolved"
-          ? {
-              stroke: "rgba(136, 147, 163, 0.92)",
-              strokeWidth: 2,
-              strokeDasharray: "6 4",
-            }
-          : undefined,
-    data: {
-      note: edge.note ?? "",
-    },
-  }));
-
-  return { nodes: reactFlowNodes, edges: reactFlowEdges };
 }
 
 function buildSimulationLabel(
@@ -402,6 +154,9 @@ function buildSimulationLabel(
       <div className="graph-node-meta">
         Importance {formatCentrality(event.centrality_score)} · {event.dependency_count} deps
       </div>
+      <div className="graph-node-meta">
+        {event.faction_names.length > 0 ? event.faction_names.join(", ") : "No faction tags"}
+      </div>
       {affectedTitles.length > 0 ? (
         <div className="graph-node-meta">Depends on: {affectedTitles.join(", ")}</div>
       ) : null}
@@ -409,23 +164,25 @@ function buildSimulationLabel(
   );
 }
 
+function toRenderedNodeId(nodeId: string, mode: GraphMode): string {
+  return mode === "simulation" ? `what-if:${nodeId}` : nodeId;
+}
+
+function toRenderedEdgeId(edgeId: string, mode: GraphMode): string {
+  return mode === "simulation" ? `what-if:${edgeId}` : edgeId;
+}
+
 function toVisualStatus(
-  status: TimelineBreakSimulationNodeRecord["status"],
+  status: TimelineBreakSimulationNodeRecord["status"] | "normal" | "deactivated",
 ): GraphNodeData["status"] {
   return status === "active" ? "normal" : status;
 }
 
 function nodeColor(tone: GraphNodeData["tone"], status: GraphNodeData["status"]): string {
-  if (status === "broken") {
+  if (status === "broken" || status === "invalidated") {
     return "#ff727a";
   }
-  if (status === "invalidated") {
-    return "#ff727a";
-  }
-  if (status === "unresolved") {
-    return "#8893a3";
-  }
-  if (status === "deactivated") {
+  if (status === "unresolved" || status === "deactivated") {
     return "#8893a3";
   }
   if (tone === "focus") {
@@ -437,6 +194,371 @@ function nodeColor(tone: GraphNodeData["tone"], status: GraphNodeData["status"])
   return "#ff9ba7";
 }
 
+function hashToPaletteIndex(value: string): number {
+  let hash = 0;
+  for (const char of value) {
+    hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  }
+  return hash % GRAPH_ACCENT_PALETTE.length;
+}
+
+function nodeAccent(event: GraphSourceNode, colorMode: GraphColorMode): string {
+  if (colorMode === "tone") {
+    return "#e9b44c";
+  }
+  if (colorMode === "era") {
+    const key = event.era ?? "unclassified-era";
+    return GRAPH_ACCENT_PALETTE[hashToPaletteIndex(key)];
+  }
+  const key =
+    event.faction_names.length === 0
+      ? "unaligned"
+      : event.faction_names.length === 1
+        ? event.faction_names[0]
+        : "mixed-factions";
+  return GRAPH_ACCENT_PALETTE[hashToPaletteIndex(key)];
+}
+
+function toneForNode(
+  nodeId: string,
+  focusEventId: string,
+  incoming: Map<string, string[]>,
+  outgoing: Map<string, string[]>,
+): GraphNodeData["tone"] {
+  if (nodeId === focusEventId) {
+    return "focus";
+  }
+
+  const dependencyDistance = new Map<string, number>([[focusEventId, 0]]);
+  const dependencyQueue: string[] = [focusEventId];
+  while (dependencyQueue.length > 0) {
+    const current = dependencyQueue.shift();
+    if (current === undefined) {
+      break;
+    }
+    const distance = dependencyDistance.get(current) ?? 0;
+    for (const parent of incoming.get(current) ?? []) {
+      if (!dependencyDistance.has(parent)) {
+        dependencyDistance.set(parent, distance - 1);
+        dependencyQueue.push(parent);
+      }
+    }
+  }
+
+  const consequenceDistance = new Map<string, number>([[focusEventId, 0]]);
+  const consequenceQueue: string[] = [focusEventId];
+  while (consequenceQueue.length > 0) {
+    const current = consequenceQueue.shift();
+    if (current === undefined) {
+      break;
+    }
+    const distance = consequenceDistance.get(current) ?? 0;
+    for (const child of outgoing.get(current) ?? []) {
+      if (!consequenceDistance.has(child)) {
+        consequenceDistance.set(child, distance + 1);
+        consequenceQueue.push(child);
+      }
+    }
+  }
+
+  return (dependencyDistance.get(nodeId) ?? 0) < 0 ? "dependency" : "consequence";
+}
+
+function computePathSelection(
+  edges: CausalGraphEdgeRecord[],
+  mode: GraphMode,
+  startNodeId: string | null,
+  endNodeId: string | null,
+): PathSelection {
+  if (!startNodeId || !endNodeId || startNodeId === endNodeId) {
+    return { edges: new Set(), nodes: new Set(startNodeId ? [toRenderedNodeId(startNodeId, mode)] : []) };
+  }
+
+  const outgoing = new Map<string, Array<{ edgeId: string; targetId: string }>>();
+  for (const edge of edges) {
+    const bucket = outgoing.get(edge.source_id) ?? [];
+    bucket.push({ edgeId: edge.id, targetId: edge.target_id });
+    outgoing.set(edge.source_id, bucket);
+  }
+
+  const path = findDirectedPath(outgoing, startNodeId, endNodeId) ?? findDirectedPath(outgoing, endNodeId, startNodeId);
+  if (!path) {
+    return {
+      edges: new Set(),
+      nodes: new Set([toRenderedNodeId(startNodeId, mode), toRenderedNodeId(endNodeId, mode)]),
+    };
+  }
+
+  return {
+    edges: new Set(path.edgeIds.map((edgeId) => toRenderedEdgeId(edgeId, mode))),
+    nodes: new Set(path.nodeIds.map((nodeId) => toRenderedNodeId(nodeId, mode))),
+  };
+}
+
+function findDirectedPath(
+  outgoing: Map<string, Array<{ edgeId: string; targetId: string }>>,
+  startNodeId: string,
+  endNodeId: string,
+): { edgeIds: string[]; nodeIds: string[] } | null {
+  const queue: string[] = [startNodeId];
+  const previous = new Map<string, { edgeId: string; fromNodeId: string }>();
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (current === undefined) {
+      break;
+    }
+    if (current === endNodeId) {
+      break;
+    }
+
+    for (const next of outgoing.get(current) ?? []) {
+      if (next.targetId === startNodeId || previous.has(next.targetId)) {
+        continue;
+      }
+      previous.set(next.targetId, { edgeId: next.edgeId, fromNodeId: current });
+      queue.push(next.targetId);
+    }
+  }
+
+  if (startNodeId !== endNodeId && !previous.has(endNodeId)) {
+    return null;
+  }
+
+  const edgeIds: string[] = [];
+  const nodeIds: string[] = [endNodeId];
+  let cursor = endNodeId;
+  while (cursor !== startNodeId) {
+    const step = previous.get(cursor);
+    if (!step) {
+      return null;
+    }
+    edgeIds.unshift(step.edgeId);
+    nodeIds.unshift(step.fromNodeId);
+    cursor = step.fromNodeId;
+  }
+
+  return { edgeIds, nodeIds };
+}
+
+function groupIncomingAndOutgoing(edges: CausalGraphEdgeRecord[]): {
+  incoming: Map<string, string[]>;
+  outgoing: Map<string, string[]>;
+} {
+  const incoming = new Map<string, string[]>();
+  const outgoing = new Map<string, string[]>();
+  for (const edge of edges) {
+    const nextOutgoing = outgoing.get(edge.source_id) ?? [];
+    nextOutgoing.push(edge.target_id);
+    outgoing.set(edge.source_id, nextOutgoing);
+
+    const nextIncoming = incoming.get(edge.target_id) ?? [];
+    nextIncoming.push(edge.source_id);
+    incoming.set(edge.target_id, nextIncoming);
+  }
+  return { incoming, outgoing };
+}
+
+function buildGraph(
+  source: GraphSource,
+  {
+    colorMode,
+    mode,
+    pathSelection,
+    pathAnchorId,
+    simulateEnabled,
+  }: {
+    colorMode: GraphColorMode;
+    mode: GraphMode;
+    pathSelection: PathSelection;
+    pathAnchorId: string | null;
+    simulateEnabled: boolean;
+  },
+): GraphBuildResult {
+  const { incoming, outgoing } = groupIncomingAndOutgoing(source.edges);
+  const eventById = new Map(source.nodes.map((node) => [node.id, node]));
+  const sortedEvents = [...source.nodes].sort((left, right) => {
+    const leftRank = "topological_rank" in left ? left.topological_rank : 0;
+    const rightRank = "topological_rank" in right ? right.topological_rank : 0;
+    if (leftRank !== rightRank) {
+      return leftRank - rightRank;
+    }
+    if (left.start_year !== right.start_year) {
+      return left.start_year - right.start_year;
+    }
+    return left.title.localeCompare(right.title);
+  });
+
+  const chronologyYears = Array.from(new Set(sortedEvents.map((event) => event.start_year))).sort(
+    (left, right) => left - right,
+  );
+  const chronologyColumnByYear = new Map(chronologyYears.map((year, index) => [year, index]));
+
+  const dagreGraph = new dagre.graphlib.Graph();
+  dagreGraph.setDefaultEdgeLabel(() => ({}));
+  dagreGraph.setGraph({
+    rankdir: "LR",
+    align: "UL",
+    nodesep: 52,
+    ranksep: 96,
+    edgesep: 30,
+    marginx: LAYOUT_MARGIN_X,
+    marginy: LAYOUT_MARGIN_Y,
+  });
+
+  for (const event of sortedEvents) {
+    dagreGraph.setNode(event.id, {
+      width: NODE_WIDTH,
+      height: NODE_HEIGHT,
+    });
+  }
+
+  for (const edge of source.edges) {
+    dagreGraph.setEdge(edge.source_id, edge.target_id);
+  }
+
+  dagre.layout(dagreGraph);
+
+  const hasPathSelection = pathSelection.nodes.size > 1 || pathSelection.edges.size > 0;
+  const focusEventId = source.brokenEventId ?? source.nodes[0]?.id ?? "";
+
+  const nodes: Node<GraphNodeData>[] = sortedEvents.map((event) => {
+    const tone = toneForNode(event.id, focusEventId, incoming, outgoing);
+    const layoutNode = dagreGraph.node(event.id);
+    const chronologyColumn = chronologyColumnByYear.get(event.start_year) ?? 0;
+    const renderedNodeId = toRenderedNodeId(event.id, mode);
+    const accent = nodeAccent(event, colorMode);
+    const isOnPath = pathSelection.nodes.has(renderedNodeId);
+    const isAnchor = pathAnchorId === event.id;
+    const status =
+      "status" in event
+        ? toVisualStatus(event.status)
+        : (simulateEnabled ? "deactivated" : "normal");
+
+    return {
+      id: renderedNodeId,
+      type: "default",
+      position: {
+        x: LAYOUT_MARGIN_X + chronologyColumn * CHRONOLOGY_COLUMN_GAP,
+        y: layoutNode.y - NODE_HEIGHT / 2,
+      },
+      className: `graph-node-shell graph-node-shell-${status}`,
+      style: {
+        borderColor: accent,
+        boxShadow: isAnchor
+          ? `0 0 0 3px ${accent}55, 0 18px 45px rgba(0, 0, 0, 0.22)`
+          : undefined,
+        opacity: hasPathSelection && !isOnPath ? 0.38 : 1,
+      },
+      sourcePosition: Position.Right,
+      targetPosition: Position.Left,
+      data: {
+        label:
+          "status" in event
+            ? buildSimulationLabel(event, eventById as Map<string, TimelineBreakSimulationNodeRecord>)
+            : buildLabel(event),
+        slug: event.slug,
+        tone,
+        status,
+      },
+      draggable: false,
+    };
+  });
+
+  const edges: Edge[] = source.edges.map((edge) => {
+    const renderedEdgeId = toRenderedEdgeId(edge.id, mode);
+    const targetNode = eventById.get(edge.target_id);
+    const edgeOnPath = pathSelection.edges.has(renderedEdgeId);
+    const accent = targetNode ? nodeAccent(targetNode, colorMode) : "#e9b44c";
+    const targetStatus = targetNode && "status" in targetNode ? targetNode.status : null;
+
+    return {
+      id: renderedEdgeId,
+      source: toRenderedNodeId(edge.source_id, mode),
+      target: toRenderedNodeId(edge.target_id, mode),
+      type: "causal",
+      markerEnd: { type: MarkerType.ArrowClosed },
+      animated: edgeOnPath,
+      sourcePosition: Position.Right,
+      targetPosition: Position.Left,
+      style:
+        edgeOnPath
+          ? {
+              stroke: accent,
+              strokeWidth: 3.6,
+            }
+          : targetStatus === "invalidated"
+            ? {
+                stroke: "rgba(255, 114, 122, 0.92)",
+                strokeWidth: 2.4,
+                opacity: hasPathSelection ? 0.3 : 1,
+              }
+            : targetStatus === "unresolved"
+              ? {
+                  stroke: "rgba(136, 147, 163, 0.92)",
+                  strokeWidth: 2,
+                  strokeDasharray: "6 4",
+                  opacity: hasPathSelection ? 0.3 : 1,
+                }
+              : {
+                  stroke: accent,
+                  strokeWidth: 1.8,
+                  opacity: hasPathSelection ? 0.2 : 0.9,
+                },
+      data: {
+        note: edge.note ?? "",
+      },
+    };
+  });
+
+  return {
+    nodes,
+    edges,
+    renderedNodeIds: nodes.map((node) => node.id),
+  };
+}
+
+function selectionLabel(source: GraphSource, startNodeId: string | null, endNodeId: string | null): string {
+  const nodeById = new Map(source.nodes.map((node) => [node.id, node]));
+  if (!startNodeId) {
+    return "Click one node to anchor a path. Click a second node to highlight the causal route between them.";
+  }
+  if (!endNodeId || startNodeId === endNodeId) {
+    return `Anchor: ${nodeById.get(startNodeId)?.title ?? "Unknown event"}. Choose another node to trace the path.`;
+  }
+  const startTitle = nodeById.get(startNodeId)?.title ?? "Unknown event";
+  const endTitle = nodeById.get(endNodeId)?.title ?? "Unknown event";
+  return `Tracing path between ${startTitle} and ${endTitle}. Double-click any node to open its detail page.`;
+}
+
+function currentSource(
+  graph: CausalGraphResponse,
+  simulation: TimelineBreakSimulationResponse | null | undefined,
+  simulateEnabled: boolean,
+): { mode: GraphMode; source: GraphSource } {
+  if (simulateEnabled && simulation) {
+    return {
+      mode: "simulation",
+      source: {
+        brokenEventId: simulation.broken_event_id,
+        depth: graph.depth,
+        edges: simulation.edges,
+        nodes: simulation.nodes,
+      },
+    };
+  }
+
+  return {
+    mode: "canonical",
+    source: {
+      brokenEventId: graph.focus_event_id,
+      depth: graph.depth,
+      edges: graph.edges,
+      nodes: graph.nodes,
+    },
+  };
+}
+
 export function EventFocusGraph({
   graph,
   simulation,
@@ -445,30 +567,90 @@ export function EventFocusGraph({
 }: EventFocusGraphProps) {
   const router = useRouter();
   const [hoveredNote, setHoveredNote] = useState<string | null>(null);
-  const handleHoverNoteChange = useCallback((note: string | null) => {
-    setHoveredNote((current) => (current === note ? current : note));
-  }, []);
-  const handleNodeClick = useCallback<NodeMouseHandler>(
-    (_, node) => {
-      const slug = (node.data as GraphNodeData).slug;
-      router.push(`/events/${slug}` as Route);
-    },
-    [router],
+  const [colorMode, setColorMode] = useState<GraphColorMode>("tone");
+  const [pathStartNodeId, setPathStartNodeId] = useState<string | null>(null);
+  const [pathEndNodeId, setPathEndNodeId] = useState<string | null>(null);
+  const clickTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const activeGraph = useMemo(
+    () => currentSource(graph, simulation, simulateEnabled),
+    [graph, simulateEnabled, simulation],
+  );
+
+  const pathSelection = useMemo(
+    () => computePathSelection(activeGraph.source.edges, activeGraph.mode, pathStartNodeId, pathEndNodeId),
+    [activeGraph.mode, activeGraph.source.edges, pathEndNodeId, pathStartNodeId],
   );
 
   const reactFlowGraph = useMemo(
     () =>
-      simulateEnabled && simulation
-        ? buildSimulationGraph(simulation)
-        : buildCanonicalGraph(graph, simulateEnabled),
-    [graph, simulateEnabled, simulation],
+      buildGraph(activeGraph.source, {
+        colorMode,
+        mode: activeGraph.mode,
+        pathSelection,
+        pathAnchorId: pathStartNodeId,
+        simulateEnabled,
+      }),
+    [activeGraph.mode, activeGraph.source, colorMode, pathSelection, pathStartNodeId, simulateEnabled],
   );
+
   const reactFlowKey = useMemo(
     () =>
-      simulateEnabled && simulation
-        ? `simulation:${simulation.broken_event_id}:${simulation.nodes.length}:${simulation.edges.length}`
-        : `canonical:${graph.focus_event_id}:${graph.nodes.length}:${graph.edges.length}`,
-    [graph.edges.length, graph.focus_event_id, graph.nodes.length, simulateEnabled, simulation],
+      `${activeGraph.mode}:${activeGraph.source.brokenEventId ?? "graph"}:${reactFlowGraph.renderedNodeIds.length}:${activeGraph.source.edges.length}:${colorMode}`,
+    [activeGraph.mode, activeGraph.source.brokenEventId, activeGraph.source.edges.length, colorMode, reactFlowGraph.renderedNodeIds.length],
+  );
+
+  const handleHoverNoteChange = useCallback((note: string | null) => {
+    setHoveredNote((current) => (current === note ? current : note));
+  }, []);
+
+  const handleClearPath = useCallback(() => {
+    if (clickTimeoutRef.current !== null) {
+      clearTimeout(clickTimeoutRef.current);
+      clickTimeoutRef.current = null;
+    }
+    setHoveredNote(null);
+    setPathStartNodeId(null);
+    setPathEndNodeId(null);
+  }, []);
+
+  const handleNodeClick = useCallback<NodeMouseHandler>(
+    (_, node) => {
+      const rawId = node.id.startsWith("what-if:") ? node.id.replace("what-if:", "") : node.id;
+      if (clickTimeoutRef.current !== null) {
+        clearTimeout(clickTimeoutRef.current);
+      }
+      clickTimeoutRef.current = setTimeout(() => {
+        setPathStartNodeId((currentStart) => {
+          if (currentStart === null) {
+            setPathEndNodeId(null);
+            return rawId;
+          }
+          if (currentStart === rawId) {
+            setPathEndNodeId(null);
+            return null;
+          }
+          setPathEndNodeId(rawId);
+          return currentStart;
+        });
+        clickTimeoutRef.current = null;
+      }, 220);
+    },
+    [],
+  );
+
+  const handleNodeDoubleClick = useCallback<NodeMouseHandler>(
+    (event, node) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (clickTimeoutRef.current !== null) {
+        clearTimeout(clickTimeoutRef.current);
+        clickTimeoutRef.current = null;
+      }
+      const slug = (node.data as GraphNodeData).slug;
+      router.push(`/events/${slug}` as Route);
+    },
+    [router],
   );
 
   const edgesWithHoverData: Edge[] = useMemo(
@@ -483,6 +665,11 @@ export function EventFocusGraph({
     [handleHoverNoteChange, reactFlowGraph.edges],
   );
 
+  const pathSummary = useMemo(
+    () => selectionLabel(activeGraph.source, pathStartNodeId, pathEndNodeId),
+    [activeGraph.source, pathEndNodeId, pathStartNodeId],
+  );
+
   return (
     <div className="graph-shell">
       <div className="graph-header">
@@ -491,8 +678,8 @@ export function EventFocusGraph({
           <h2>Focused causal map</h2>
         </div>
         <p className="timeline-caption">
-          Visualizing actual <code>CAUSES</code> edges within depth {graph.depth}. Nodes are laid
-          out relative to the focus event rather than collapsed into a star.
+          Visualizing actual <code>CAUSES</code> edges within depth {activeGraph.source.depth}. Use
+          click-to-anchor path tracing and switch node coloring by graph tone, era, or faction.
           {simulateEnabled
             ? simulationLoading
               ? " Alternate timeline is loading."
@@ -503,11 +690,27 @@ export function EventFocusGraph({
         </p>
       </div>
 
+      <div className="graph-toolbar">
+        <label className="filter-field graph-filter-field">
+          <span>Node color</span>
+          <select value={colorMode} onChange={(event) => setColorMode(event.target.value as GraphColorMode)}>
+            <option value="tone">Graph tone</option>
+            <option value="era">Era</option>
+            <option value="faction">Faction</option>
+          </select>
+        </label>
+        <button
+          type="button"
+          className="secondary-link graph-clear-button"
+          onClick={handleClearPath}
+        >
+          Clear path
+        </button>
+      </div>
+
       <div className="graph-note-panel" aria-live="polite">
-        <span className="graph-note-label">Edge note</span>
-        <p className="graph-note-copy">
-          {hoveredNote ?? "Hover over a causal edge to inspect its relationship note."}
-        </p>
+        <span className="graph-note-label">Path inspector</span>
+        <p className="graph-note-copy">{hoveredNote ?? pathSummary}</p>
       </div>
 
       <div className="graph-canvas">
@@ -524,7 +727,9 @@ export function EventFocusGraph({
           edgeTypes={EDGE_TYPES}
           defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}
           nodeOrigin={[0, 0]}
+          zoomOnDoubleClick={false}
           onNodeClick={handleNodeClick}
+          onNodeDoubleClick={handleNodeDoubleClick}
         >
           <MiniMap
             pannable
