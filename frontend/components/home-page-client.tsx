@@ -3,7 +3,7 @@
 import type { Route } from "next";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import {
   type CharacterRecord,
   type FactionRecord,
@@ -35,6 +35,14 @@ type HomePageData = {
   planets: PlanetRecord[];
   searchResults: SearchResultRecord[];
   timeline: EventListResponse;
+};
+
+type TimelineZoomLevel = "year" | "decade";
+type TimelineGroup = {
+  events: EventListResponse["items"];
+  id: string;
+  label: string;
+  summary: string;
 };
 
 function buildEraSummary(eras: Array<string | null>): string {
@@ -81,6 +89,39 @@ function searchSectionTitle(query: string, total: number): string {
     return `No matches for "${query}"`;
   }
   return `${total} match${total === 1 ? "" : "es"} for "${query}"`;
+}
+
+function decadeStart(year: number): number {
+  return Math.floor(year / 10) * 10;
+}
+
+function decadeLabel(year: number): string {
+  const start = decadeStart(year);
+  const end = start + 9;
+  return `${formatChronology(start)} to ${formatChronology(end)}`;
+}
+
+function buildTimelineGroups(
+  items: EventListResponse["items"],
+  zoomLevel: TimelineZoomLevel,
+): TimelineGroup[] {
+  const groups = new Map<string, TimelineGroup>();
+
+  for (const event of items) {
+    const key = zoomLevel === "year" ? String(event.start_year) : `decade:${decadeStart(event.start_year)}`;
+    const label = zoomLevel === "year" ? formatChronology(event.start_year) : decadeLabel(event.start_year);
+    const summary = zoomLevel === "year" ? "Year view" : "Decade view";
+    const current = groups.get(key) ?? {
+      events: [],
+      id: key,
+      label,
+      summary,
+    };
+    current.events.push(event);
+    groups.set(key, current);
+  }
+
+  return Array.from(groups.values());
 }
 
 function renderSearchResults(query: string, items: SearchResultRecord[]) {
@@ -192,6 +233,7 @@ function renderEntityPreview(
 
 export function HomePageClient({ initialSearchParams }: HomePageClientProps) {
   const router = useRouter();
+  const [timelineZoomLevel, setTimelineZoomLevel] = useState<TimelineZoomLevel>("year");
   const startYear = parseChronologyInput(initialSearchParams.start_year);
   const endYear = parseChronologyInput(initialSearchParams.end_year);
   const startYearInput = formatChronologyInput(initialSearchParams.start_year);
@@ -281,6 +323,10 @@ export function HomePageClient({ initialSearchParams }: HomePageClientProps) {
         ),
       ).sort((left, right) => left.localeCompare(right)),
     [data?.timeline.items],
+  );
+  const timelineGroups = useMemo(
+    () => buildTimelineGroups(data?.timeline.items ?? [], timelineZoomLevel),
+    [data?.timeline.items, timelineZoomLevel],
   );
 
   if (isLoading) {
@@ -387,6 +433,23 @@ export function HomePageClient({ initialSearchParams }: HomePageClientProps) {
           </p>
         </header>
 
+        <div className="timeline-zoom-bar" role="tablist" aria-label="Timeline zoom">
+          <button
+            type="button"
+            className={`timeline-zoom-button${timelineZoomLevel === "year" ? " is-active" : ""}`}
+            onClick={() => setTimelineZoomLevel("year")}
+          >
+            Year view
+          </button>
+          <button
+            type="button"
+            className={`timeline-zoom-button${timelineZoomLevel === "decade" ? " is-active" : ""}`}
+            onClick={() => setTimelineZoomLevel("decade")}
+          >
+            Decade view
+          </button>
+        </div>
+
         <form
           className="filter-bar filter-bar-wide"
           method="get"
@@ -460,22 +523,35 @@ export function HomePageClient({ initialSearchParams }: HomePageClientProps) {
           </div>
         </form>
 
-        <div className="timeline-list">
-          {data.timeline.items.map((event) => (
-            <article key={event.id} className="timeline-card">
-              <div className="timeline-marker" aria-hidden="true" />
-              <Link
-                href={`/events/${event.slug}` as Route}
-                className="timeline-card-body timeline-link-card"
-              >
-                <div className="timeline-meta">
-                  <span className="timeline-year">{formatEventRange(event.start_year, event.end_year)}</span>
-                  <span className="timeline-era">{event.era ?? "Unclassified era"}</span>
+        <div className="timeline-groups">
+          {timelineGroups.map((group) => (
+            <section key={group.id} className="timeline-group">
+              <header className="timeline-group-header">
+                <div>
+                  <p className="section-kicker">{group.summary}</p>
+                  <h3>{group.label}</h3>
                 </div>
-                <h3>{event.title}</h3>
-                <p>{event.description ?? "No description available."}</p>
-              </Link>
-            </article>
+                <span className="timeline-group-count">{group.events.length} events</span>
+              </header>
+              <div className="timeline-list">
+                {group.events.map((event) => (
+                  <article key={event.id} className="timeline-card">
+                    <div className="timeline-marker" aria-hidden="true" />
+                    <Link
+                      href={`/events/${event.slug}` as Route}
+                      className="timeline-card-body timeline-link-card"
+                    >
+                      <div className="timeline-meta">
+                        <span className="timeline-year">{formatEventRange(event.start_year, event.end_year)}</span>
+                        <span className="timeline-era">{event.era ?? "Unclassified era"}</span>
+                      </div>
+                      <h3>{event.title}</h3>
+                      <p>{event.description ?? "No description available."}</p>
+                    </Link>
+                  </article>
+                ))}
+              </div>
+            </section>
           ))}
         </div>
       </section>
