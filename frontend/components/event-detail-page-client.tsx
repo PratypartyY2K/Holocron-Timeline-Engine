@@ -2,7 +2,7 @@
 
 import type { Route } from "next";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { EventFocusGraph } from "./event-focus-graph";
 import {
   type EventRecord,
@@ -58,8 +58,18 @@ function renderEventList(items: EventRecord[], emptyLabel: string) {
   );
 }
 
+function inlineEntityLink(href: Route, label: string) {
+  return (
+    <Link href={href} className="inline-entity-link">
+      {label}
+    </Link>
+  );
+}
+
 export function EventDetailPageClient({ depth, slug }: EventDetailPageClientProps) {
   const [isWhatIfEnabled, setIsWhatIfEnabled] = useState(false);
+  const [dependencyDepth, setDependencyDepth] = useState(depth);
+  const [dependencyDepthDraft, setDependencyDepthDraft] = useState(String(depth));
   const { data, error, isLoading } = useAsyncData<EventDetailData>(
     async () => {
       const event = await getEventBySlug(slug);
@@ -79,6 +89,19 @@ export function EventDetailPageClient({ depth, slug }: EventDetailPageClientProp
       };
     },
     [depth, slug],
+  );
+  const {
+    data: dependencyItems,
+    error: dependencyError,
+    isLoading: isDependencyLoading,
+  } = useAsyncData<EventRecord[] | null>(
+    async () => {
+      if (!data?.event.id) {
+        return null;
+      }
+      return getEventDependencies(data.event.id, dependencyDepth);
+    },
+    [data?.event.id, dependencyDepth],
   );
   const impactEventId = isWhatIfEnabled ? data?.event.id ?? null : null;
   const {
@@ -101,6 +124,19 @@ export function EventDetailPageClient({ depth, slug }: EventDetailPageClientProp
     simulationData?.nodes.filter((node) => node.status === "unresolved").length ?? 0;
 
   const eventImportance = data?.event.centrality_score.toFixed(2) ?? "0.00";
+
+  useEffect(() => {
+    setDependencyDepth(depth);
+    setDependencyDepthDraft(String(depth));
+  }, [depth, slug]);
+
+  function handleDependencyDepthSubmit(event: FormEvent<HTMLFormElement>): void {
+    event.preventDefault();
+    const nextDepth = Number.parseInt(dependencyDepthDraft, 10);
+    if (!Number.isNaN(nextDepth) && nextDepth >= 1 && nextDepth <= 5) {
+      setDependencyDepth(nextDepth);
+    }
+  }
 
   if (isLoading) {
     return (
@@ -226,10 +262,20 @@ export function EventDetailPageClient({ depth, slug }: EventDetailPageClientProp
                 {data.universeState.characters.map((character) => (
                   <article key={character.id} className="universe-state-row">
                     <div>
-                      <strong>{character.name}</strong>
+                      <strong>
+                        {inlineEntityLink(`/characters/${character.slug}` as Route, character.name)}
+                      </strong>
                       <p>
                         {character.is_alive ? "Alive" : "Dead"}
-                        {character.location_planet_name ? ` · ${character.location_planet_name}` : ""}
+                        {character.location_planet_name && character.location_planet_slug ? (
+                          <>
+                            {" · "}
+                            {inlineEntityLink(
+                              `/planets/${character.location_planet_slug}` as Route,
+                              character.location_planet_name,
+                            )}
+                          </>
+                        ) : null}
                       </p>
                     </div>
                   </article>
@@ -243,8 +289,10 @@ export function EventDetailPageClient({ depth, slug }: EventDetailPageClientProp
                 {data.universeState.faction_control.map((control) => (
                   <article key={control.planet_slug} className="universe-state-row">
                     <div>
-                      <strong>{control.planet_name}</strong>
-                      <p>{control.faction_name}</p>
+                      <strong>
+                        {inlineEntityLink(`/planets/${control.planet_slug}` as Route, control.planet_name)}
+                      </strong>
+                      <p>{inlineEntityLink(`/factions/${control.faction_slug}` as Route, control.faction_name)}</p>
                     </div>
                   </article>
                 ))}
@@ -259,8 +307,21 @@ export function EventDetailPageClient({ depth, slug }: EventDetailPageClientProp
                     <div>
                       <strong>{artifact.artifact_name}</strong>
                       <p>
-                        {artifact.holder_character_name ?? "Unknown holder"}
-                        {artifact.location_planet_name ? ` · ${artifact.location_planet_name}` : ""}
+                        {artifact.holder_character_name && artifact.holder_character_slug
+                          ? inlineEntityLink(
+                              `/characters/${artifact.holder_character_slug}` as Route,
+                              artifact.holder_character_name,
+                            )
+                          : "Unknown holder"}
+                        {artifact.location_planet_name && artifact.location_planet_slug ? (
+                          <>
+                            {" · "}
+                            {inlineEntityLink(
+                              `/planets/${artifact.location_planet_slug}` as Route,
+                              artifact.location_planet_name,
+                            )}
+                          </>
+                        ) : null}
                       </p>
                       {artifact.note ? <span>{artifact.note}</span> : null}
                     </div>
@@ -284,13 +345,17 @@ export function EventDetailPageClient({ depth, slug }: EventDetailPageClientProp
               <h2>Events that lead here</h2>
             </div>
             <p className="timeline-caption">
-              Showing browser-fetched causal ancestors from <code>/dependencies?depth={depth}</code>.
+              Showing browser-fetched causal ancestors from <code>/dependencies?depth={dependencyDepth}</code>.
             </p>
           </header>
-          <form className="detail-toolbar" method="get">
+          <form className="detail-toolbar" method="get" onSubmit={handleDependencyDepthSubmit}>
             <label className="filter-field">
               <span>Traversal depth</span>
-              <select name="depth" defaultValue={String(depth)}>
+              <select
+                name="depth"
+                value={dependencyDepthDraft}
+                onChange={(event) => setDependencyDepthDraft(event.target.value)}
+              >
                 <option value="1">1 hop</option>
                 <option value="2">2 hops</option>
                 <option value="3">3 hops</option>
@@ -304,7 +369,14 @@ export function EventDetailPageClient({ depth, slug }: EventDetailPageClientProp
               </button>
             </div>
           </form>
-          {renderEventList(data.dependencies, `No upstream dependencies found within depth ${depth}.`)}
+          {isDependencyLoading ? (
+            <p className="detail-empty">Updating dependencies…</p>
+          ) : dependencyError ? (
+            <p className="detail-empty">{dependencyError}</p>
+          ) : renderEventList(
+              dependencyItems ?? data.dependencies,
+              `No upstream dependencies found within depth ${dependencyDepth}.`,
+            )}
         </section>
 
         <section className="timeline-shell detail-panel">
