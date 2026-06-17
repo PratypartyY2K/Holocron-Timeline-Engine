@@ -128,6 +128,23 @@ Open Neo4j Browser and run the Cypher from:
 scripts/seed/init_schema.cypher
 ```
 
+### Contributor Data Pipeline
+
+Contributors do not need to write Cypher to add archive data.
+
+Add JSON fragments under `data/raw/`, then transform and ingest them through the
+backend pipeline:
+
+```bash
+uv run python scripts/transform.py
+uv run python scripts/ingest.py
+```
+
+The transform step compiles raw fragments into `data/processed/dataset.json`.
+The ingest step resolves slug-based references and writes through the backend's
+service layer, so relationship validation and chronology rules are reused during
+import.
+
 ### Audit Relationship Integrity
 
 To audit existing graph data for relationship integrity violations, run:
