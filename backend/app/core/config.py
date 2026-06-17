@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     app_host: str = Field(default="0.0.0.0", alias="APP_HOST")
     app_port: int = Field(default=8000, alias="APP_PORT")
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
+    slow_request_threshold_ms: float = Field(default=1000.0, alias="SLOW_REQUEST_THRESHOLD_MS")
+    slow_query_threshold_ms: float = Field(default=250.0, alias="SLOW_QUERY_THRESHOLD_MS")
     neo4j_uri: str = Field(alias="NEO4J_URI")
     neo4j_username: str = Field(alias="NEO4J_USERNAME")
     neo4j_password: str = Field(alias="NEO4J_PASSWORD")

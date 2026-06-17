@@ -5,13 +5,13 @@ from neo4j import Driver
 from app.core.config import Settings
 from app.domain.entities.character import Character
 from app.repositories.interfaces.character_repository import CharacterRepository
+from app.repositories.neo4j.base import Neo4jRepositoryBase
 from app.repositories.neo4j.mappers import map_character_record
 
 
-class Neo4jCharacterRepository(CharacterRepository):
+class Neo4jCharacterRepository(Neo4jRepositoryBase, CharacterRepository):
     def __init__(self, driver: Driver, settings: Settings) -> None:
-        self._driver = driver
-        self._database = settings.neo4j_database
+        super().__init__(driver, settings)
 
     def create(self, character: Character) -> Character:
         query = """
@@ -27,8 +27,7 @@ class Neo4jCharacterRepository(CharacterRepository):
         })
         RETURN properties(c) AS character
         """
-        with self._driver.session(database=self._database) as session:
-            record = session.execute_write(self._create_tx, query, character)
+        record = self._execute_write("character.create", self._create_tx, query, character)
         return map_character_record(record)
 
     def get_by_id(self, character_id: str) -> Character | None:
@@ -36,8 +35,7 @@ class Neo4jCharacterRepository(CharacterRepository):
         MATCH (c:Character {id: $character_id})
         RETURN properties(c) AS character
         """
-        with self._driver.session(database=self._database) as session:
-            record = session.run(query, character_id=character_id).single()
+        record = self._run_single(query_name="character.get_by_id", query=query, character_id=character_id)
         if record is None:
             return None
         return map_character_record(dict(record["character"]))
@@ -47,8 +45,7 @@ class Neo4jCharacterRepository(CharacterRepository):
         MATCH (c:Character {slug: $slug})
         RETURN properties(c) AS character
         """
-        with self._driver.session(database=self._database) as session:
-            record = session.run(query, slug=slug).single()
+        record = self._run_single(query_name="character.get_by_slug", query=query, slug=slug)
         if record is None:
             return None
         return map_character_record(dict(record["character"]))
@@ -59,9 +56,8 @@ class Neo4jCharacterRepository(CharacterRepository):
         RETURN properties(c) AS character
         ORDER BY c.name ASC
         """
-        with self._driver.session(database=self._database) as session:
-            result = session.run(query)
-            return [map_character_record(dict(record["character"])) for record in result]
+        result = self._run_result(query_name="character.list", query=query)
+        return [map_character_record(dict(record["character"])) for record in result]
 
     @staticmethod
     def _create_tx(tx: Any, query: str, character: Character) -> dict[str, Any]:

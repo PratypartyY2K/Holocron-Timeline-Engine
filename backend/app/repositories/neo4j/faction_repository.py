@@ -5,13 +5,13 @@ from neo4j import Driver
 from app.core.config import Settings
 from app.domain.entities.faction import Faction
 from app.repositories.interfaces.faction_repository import FactionRepository
+from app.repositories.neo4j.base import Neo4jRepositoryBase
 from app.repositories.neo4j.mappers import map_faction_record
 
 
-class Neo4jFactionRepository(FactionRepository):
+class Neo4jFactionRepository(Neo4jRepositoryBase, FactionRepository):
     def __init__(self, driver: Driver, settings: Settings) -> None:
-        self._driver = driver
-        self._database = settings.neo4j_database
+        super().__init__(driver, settings)
 
     def create(self, faction: Faction) -> Faction:
         query = """
@@ -25,8 +25,7 @@ class Neo4jFactionRepository(FactionRepository):
         })
         RETURN properties(f) AS faction
         """
-        with self._driver.session(database=self._database) as session:
-            record = session.execute_write(self._create_tx, query, faction)
+        record = self._execute_write("faction.create", self._create_tx, query, faction)
         return map_faction_record(record)
 
     def get_by_slug(self, slug: str) -> Faction | None:
@@ -34,8 +33,7 @@ class Neo4jFactionRepository(FactionRepository):
         MATCH (f:Faction {slug: $slug})
         RETURN properties(f) AS faction
         """
-        with self._driver.session(database=self._database) as session:
-            record = session.run(query, slug=slug).single()
+        record = self._run_single(query_name="faction.get_by_slug", query=query, slug=slug)
         if record is None:
             return None
         return map_faction_record(dict(record["faction"]))
@@ -46,9 +44,8 @@ class Neo4jFactionRepository(FactionRepository):
         RETURN properties(f) AS faction
         ORDER BY f.name ASC
         """
-        with self._driver.session(database=self._database) as session:
-            result = session.run(query)
-            return [map_faction_record(dict(record["faction"])) for record in result]
+        result = self._run_result(query_name="faction.list", query=query)
+        return [map_faction_record(dict(record["faction"])) for record in result]
 
     @staticmethod
     def _create_tx(tx: Any, query: str, faction: Faction) -> dict[str, Any]:

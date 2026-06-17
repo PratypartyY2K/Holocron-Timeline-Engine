@@ -7,21 +7,20 @@ from app.domain.entities.node_reference import NodeReference
 from app.domain.entities.relationship import Relationship
 from app.domain.entities.search_result import SearchResult
 from app.repositories.interfaces.graph_repository import GraphRepository
+from app.repositories.neo4j.base import Neo4jRepositoryBase
 from app.repositories.neo4j.mappers import map_node_reference, map_relationship_record
 
 
-class Neo4jGraphRepository(GraphRepository):
+class Neo4jGraphRepository(Neo4jRepositoryBase, GraphRepository):
     def __init__(self, driver: Driver, settings: Settings) -> None:
-        self._driver = driver
-        self._database = settings.neo4j_database
+        super().__init__(driver, settings)
 
     def get_node_reference(self, node_id: str) -> NodeReference | None:
         query = """
         MATCH (n {id: $node_id})
         RETURN n.id AS id, labels(n) AS labels
         """
-        with self._driver.session(database=self._database) as session:
-            record = session.run(query, node_id=node_id).single()
+        record = self._run_single(query_name="graph.get_node_reference", query=query, node_id=node_id)
         if record is None:
             return None
         return map_node_reference({"id": record["id"], "labels": list(record["labels"])})
@@ -44,17 +43,17 @@ class Neo4jGraphRepository(GraphRepository):
           AND (($artifact_key IS NULL AND r[$artifact_key_name] IS NULL) OR r[$artifact_key_name] = $artifact_key)
         RETURN properties(r) AS relationship
         """
-        with self._driver.session(database=self._database) as session:
-            record = session.run(
-                query,
-                relationship_type=relationship_type,
-                from_node_id=from_node_id,
-                to_node_id=to_node_id,
-                subject_node_id=subject_node_id,
-                artifact_key=artifact_key,
-                subject_key="subject_node_id",
-                artifact_key_name="artifact_key",
-            ).single()
+        record = self._run_single(
+            query_name="graph.get_relationship",
+            query=query,
+            relationship_type=relationship_type,
+            from_node_id=from_node_id,
+            to_node_id=to_node_id,
+            subject_node_id=subject_node_id,
+            artifact_key=artifact_key,
+            subject_key="subject_node_id",
+            artifact_key_name="artifact_key",
+        )
         if record is None:
             return None
         return map_relationship_record(dict(record["relationship"]))
@@ -64,8 +63,12 @@ class Neo4jGraphRepository(GraphRepository):
         MATCH (:Event {id: $from_node_id})-[:CAUSES*1..]->(:Event {id: $to_node_id})
         RETURN count(*) > 0 AS path_exists
         """
-        with self._driver.session(database=self._database) as session:
-            record = session.run(query, from_node_id=from_node_id, to_node_id=to_node_id).single()
+        record = self._run_single(
+            query_name="graph.causes_path_exists",
+            query=query,
+            from_node_id=from_node_id,
+            to_node_id=to_node_id,
+        )
         if record is None:
             return False
         return bool(record["path_exists"])
@@ -75,8 +78,7 @@ class Neo4jGraphRepository(GraphRepository):
         MATCH (e:Event {id: $event_id})
         RETURN e.start_year AS start_year, e.end_year AS end_year
         """
-        with self._driver.session(database=self._database) as session:
-            record = session.run(query, event_id=event_id).single()
+        record = self._run_single(query_name="graph.get_event_chronology", query=query, event_id=event_id)
         if record is None:
             return None
         return int(record["start_year"]), record["end_year"]
@@ -149,18 +151,22 @@ class Neo4jGraphRepository(GraphRepository):
         ORDER BY score ASC, label ASC, entity_type ASC
         LIMIT $limit
         """
-        with self._driver.session(database=self._database) as session:
-            result = session.run(cypher, normalized_query=query.casefold(), limit=limit)
-            return [
-                SearchResult(
-                    entity_type=record["entity_type"],
-                    id=record["id"],
-                    slug=record["slug"],
-                    label=record["label"],
-                    description=record["description"],
-                )
-                for record in result
-            ]
+        result = self._run_result(
+            query_name="graph.search_entities",
+            query=cypher,
+            normalized_query=query.casefold(),
+            limit=limit,
+        )
+        return [
+            SearchResult(
+                entity_type=record["entity_type"],
+                id=record["id"],
+                slug=record["slug"],
+                label=record["label"],
+                description=record["description"],
+            )
+            for record in result
+        ]
 
     def create_relationship(self, relationship: Relationship) -> Relationship:
         query = f"""
@@ -181,8 +187,7 @@ class Neo4jGraphRepository(GraphRepository):
         }}]->(target)
         RETURN properties(r) AS relationship
         """
-        with self._driver.session(database=self._database) as session:
-            record = session.execute_write(self._create_tx, query, relationship)
+        record = self._execute_write("graph.create_relationship", self._create_tx, query, relationship)
         return map_relationship_record(record)
 
     @staticmethod
@@ -218,15 +223,15 @@ class Neo4jGraphRepository(GraphRepository):
         RETURN properties(r) AS relationship
         ORDER BY source.start_year ASC, source.title ASC, source.id ASC, r.id ASC
         """
-        with self._driver.session(database=self._database) as session:
-            result = session.run(
-                query,
-                event_id=event_id,
-                relationship_types=[
-                    "SETS_ALIVE_STATE",
-                    "SETS_CHARACTER_LOCATION",
-                    "SETS_PLANET_CONTROL",
-                    "SETS_ARTIFACT_LOCATION",
-                ],
-            )
-            return [map_relationship_record(dict(record["relationship"])) for record in result]
+        result = self._run_result(
+            query_name="graph.list_state_mutations_before_event",
+            query=query,
+            event_id=event_id,
+            relationship_types=[
+                "SETS_ALIVE_STATE",
+                "SETS_CHARACTER_LOCATION",
+                "SETS_PLANET_CONTROL",
+                "SETS_ARTIFACT_LOCATION",
+            ],
+        )
+        return [map_relationship_record(dict(record["relationship"])) for record in result]

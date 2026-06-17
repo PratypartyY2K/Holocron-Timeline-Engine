@@ -5,13 +5,13 @@ from neo4j import Driver
 from app.core.config import Settings
 from app.domain.entities.planet import Planet
 from app.repositories.interfaces.planet_repository import PlanetRepository
+from app.repositories.neo4j.base import Neo4jRepositoryBase
 from app.repositories.neo4j.mappers import map_planet_record
 
 
-class Neo4jPlanetRepository(PlanetRepository):
+class Neo4jPlanetRepository(Neo4jRepositoryBase, PlanetRepository):
     def __init__(self, driver: Driver, settings: Settings) -> None:
-        self._driver = driver
-        self._database = settings.neo4j_database
+        super().__init__(driver, settings)
 
     def create(self, planet: Planet) -> Planet:
         query = """
@@ -26,8 +26,7 @@ class Neo4jPlanetRepository(PlanetRepository):
         })
         RETURN properties(p) AS planet
         """
-        with self._driver.session(database=self._database) as session:
-            record = session.execute_write(self._create_tx, query, planet)
+        record = self._execute_write("planet.create", self._create_tx, query, planet)
         return map_planet_record(record)
 
     def get_by_slug(self, slug: str) -> Planet | None:
@@ -35,8 +34,7 @@ class Neo4jPlanetRepository(PlanetRepository):
         MATCH (p:Planet {slug: $slug})
         RETURN properties(p) AS planet
         """
-        with self._driver.session(database=self._database) as session:
-            record = session.run(query, slug=slug).single()
+        record = self._run_single(query_name="planet.get_by_slug", query=query, slug=slug)
         if record is None:
             return None
         return map_planet_record(dict(record["planet"]))
@@ -47,9 +45,8 @@ class Neo4jPlanetRepository(PlanetRepository):
         RETURN properties(p) AS planet
         ORDER BY p.name ASC
         """
-        with self._driver.session(database=self._database) as session:
-            result = session.run(query)
-            return [map_planet_record(dict(record["planet"])) for record in result]
+        result = self._run_result(query_name="planet.list", query=query)
+        return [map_planet_record(dict(record["planet"])) for record in result]
 
     @staticmethod
     def _create_tx(tx: Any, query: str, planet: Planet) -> dict[str, Any]:

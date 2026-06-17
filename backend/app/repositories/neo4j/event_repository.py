@@ -9,13 +9,13 @@ from app.domain.entities.event_impact import EventImpact
 from app.domain.entities.timeline_break_simulation import TimelineBreakSimulationGraph
 from app.domain.enums import RelationshipType
 from app.repositories.interfaces.event_repository import EventRepository
+from app.repositories.neo4j.base import Neo4jRepositoryBase
 from app.repositories.neo4j.mappers import map_event_record
 
 
-class Neo4jEventRepository(EventRepository):
+class Neo4jEventRepository(Neo4jRepositoryBase, EventRepository):
     def __init__(self, driver: Driver, settings: Settings) -> None:
-        self._driver = driver
-        self._database = settings.neo4j_database
+        super().__init__(driver, settings)
 
     def create(self, event: Event) -> Event:
         query = """
@@ -34,8 +34,7 @@ class Neo4jEventRepository(EventRepository):
         })
         RETURN properties(e) AS event
         """
-        with self._driver.session(database=self._database) as session:
-            record = session.execute_write(self._create_tx, query, event)
+        record = self._execute_write("event.create", self._create_tx, query, event)
         return map_event_record(record)
 
     def get_by_id(self, event_id: str) -> Event | None:
@@ -201,9 +200,13 @@ class Neo4jEventRepository(EventRepository):
             "limit": limit,
             "offset": offset,
         }
-        with self._driver.session(database=self._database) as session:
-            event_records = list(session.run(query, **params))
-            count_record = session.run(count_query, **params).single()
+        def operation() -> tuple[list[Any], Any]:
+            with self._driver.session(database=self._database) as session:
+                event_records = list(session.run(query, **params))
+                count_record = session.run(count_query, **params).single()
+                return event_records, count_record
+
+        event_records, count_record = self._measure_query("event.list", operation)
         if count_record is None:
             return [], 0
         event_items = [map_event_record(dict(record["event"])) for record in event_records]
@@ -371,17 +374,21 @@ class Neo4jEventRepository(EventRepository):
             faction_names: faction_names
         } AS event
         """
-        with self._driver.session(database=self._database) as session:
-            edge_record = session.run(edge_query, event_id=event_id, depth=depth).single()
-            raw_edges = [] if edge_record is None else list(edge_record["edges"])
+        def operation() -> tuple[list[dict[str, Any]], list[Event]]:
+            with self._driver.session(database=self._database) as session:
+                edge_record = session.run(edge_query, event_id=event_id, depth=depth).single()
+                raw_edges = [] if edge_record is None else list(edge_record["edges"])
 
-            node_ids = {event_id}
-            for edge in raw_edges:
-                node_ids.add(edge["source_id"])
-                node_ids.add(edge["target_id"])
+                node_ids = {event_id}
+                for edge in raw_edges:
+                    node_ids.add(edge["source_id"])
+                    node_ids.add(edge["target_id"])
 
-            node_result = session.run(node_query, node_ids=list(node_ids))
-            nodes = [map_event_record(dict(record["event"])) for record in node_result]
+                node_result = session.run(node_query, node_ids=list(node_ids))
+                nodes = [map_event_record(dict(record["event"])) for record in node_result]
+                return raw_edges, nodes
+
+        raw_edges, nodes = self._measure_query("event.get_causal_graph", operation)
 
         edges = [
             CausalGraphEdge(
@@ -459,19 +466,23 @@ class Neo4jEventRepository(EventRepository):
             faction_names: faction_names
         } AS event
         """
-        with self._driver.session(database=self._database) as session:
-            edge_record = session.run(edge_query, event_id=event_id).single()
-            raw_edges = [] if edge_record is None else list(edge_record["edges"])
+        def operation() -> tuple[list[dict[str, Any]], list[Event]]:
+            with self._driver.session(database=self._database) as session:
+                edge_record = session.run(edge_query, event_id=event_id).single()
+                raw_edges = [] if edge_record is None else list(edge_record["edges"])
 
-            impacted_node_ids: set[str] = set()
-            for edge in raw_edges:
-                if edge["source_id"] != event_id:
-                    impacted_node_ids.add(edge["source_id"])
-                if edge["target_id"] != event_id:
-                    impacted_node_ids.add(edge["target_id"])
+                impacted_node_ids: set[str] = set()
+                for edge in raw_edges:
+                    if edge["source_id"] != event_id:
+                        impacted_node_ids.add(edge["source_id"])
+                    if edge["target_id"] != event_id:
+                        impacted_node_ids.add(edge["target_id"])
 
-            node_result = session.run(node_query, node_ids=list(impacted_node_ids))
-            impacted_events = [map_event_record(dict(record["event"])) for record in node_result]
+                node_result = session.run(node_query, node_ids=list(impacted_node_ids))
+                impacted_events = [map_event_record(dict(record["event"])) for record in node_result]
+                return raw_edges, impacted_events
+
+        raw_edges, impacted_events = self._measure_query("event.get_impact", operation)
 
         broken_edges = [
             CausalGraphEdge(
@@ -518,30 +529,37 @@ class Neo4jEventRepository(EventRepository):
         RETURN target.id AS target_id, collect(DISTINCT source.id) AS dependency_source_ids
         """
 
-        with self._driver.session(database=self._database) as session:
-            downstream_ids_record = session.run(downstream_ids_query, event_id=event_id).single()
-            downstream_ids = [] if downstream_ids_record is None else list(downstream_ids_record["downstream_ids"])
-            simulation_ids = [event_id, *downstream_ids]
+        def operation() -> tuple[list[Event], list[CausalGraphEdge], dict[str, list[str]]]:
+            with self._driver.session(database=self._database) as session:
+                downstream_ids_record = session.run(downstream_ids_query, event_id=event_id).single()
+                downstream_ids = [] if downstream_ids_record is None else list(downstream_ids_record["downstream_ids"])
+                simulation_ids = [event_id, *downstream_ids]
 
-            node_result = session.run(node_query, node_ids=simulation_ids)
-            edge_result = session.run(edge_query, simulation_ids=simulation_ids)
-            dependency_result = session.run(dependency_query, downstream_ids=downstream_ids)
+                node_result = session.run(node_query, node_ids=simulation_ids)
+                edge_result = session.run(edge_query, simulation_ids=simulation_ids)
+                dependency_result = session.run(dependency_query, downstream_ids=downstream_ids)
 
-            downstream_events = [map_event_record(dict(record["event"])) for record in node_result]
-            internal_edges = [
-                CausalGraphEdge(
-                    id=record["edge"]["id"],
-                    source_id=record["edge"]["source_id"],
-                    target_id=record["edge"]["target_id"],
-                    type=RelationshipType(record["edge"]["type"]),
-                    note=record["edge"].get("note"),
-                )
-                for record in edge_result
-            ]
-            dependency_ids_by_event_id = {
-                record["target_id"]: list(record["dependency_source_ids"])
-                for record in dependency_result
-            }
+                downstream_events = [map_event_record(dict(record["event"])) for record in node_result]
+                internal_edges = [
+                    CausalGraphEdge(
+                        id=record["edge"]["id"],
+                        source_id=record["edge"]["source_id"],
+                        target_id=record["edge"]["target_id"],
+                        type=RelationshipType(record["edge"]["type"]),
+                        note=record["edge"].get("note"),
+                    )
+                    for record in edge_result
+                ]
+                dependency_ids_by_event_id = {
+                    record["target_id"]: list(record["dependency_source_ids"])
+                    for record in dependency_result
+                }
+                return downstream_events, internal_edges, dependency_ids_by_event_id
+
+        downstream_events, internal_edges, dependency_ids_by_event_id = self._measure_query(
+            "event.get_break_simulation_graph",
+            operation,
+        )
 
         downstream_events = [event for event in downstream_events if event.id != event_id]
         downstream_events.sort(key=lambda item: (item.start_year, item.title, item.id))
@@ -574,16 +592,14 @@ class Neo4jEventRepository(EventRepository):
         return dict(record["event"])
 
     def _get_one(self, query: str, params: dict[str, Any]) -> Event | None:
-        with self._driver.session(database=self._database) as session:
-            record = session.run(query, **params).single()
+        record = self._run_single(query_name="event.get_one", query=query, **params)
         if record is None:
             return None
         return map_event_record(dict(record["event"]))
 
     def _list_events(self, query: str, params: dict[str, Any]) -> list[Event]:
-        with self._driver.session(database=self._database) as session:
-            result = session.run(query, **params)
-            return [map_event_record(dict(record["event"])) for record in result]
+        result = self._run_result(query_name="event.list_related", query=query, **params)
+        return [map_event_record(dict(record["event"])) for record in result]
 
     @staticmethod
     def _causes_path_pattern(depth: int | None) -> str:
