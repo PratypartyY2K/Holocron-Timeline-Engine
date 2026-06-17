@@ -45,7 +45,7 @@ body {
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.9fr);
   gap: 2rem;
-  align-items: end;
+  align-items: flex-end;
 }
 
 .eyebrow {
@@ -87,7 +87,7 @@ body {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 0.9rem;
-  align-items: end;
+  align-items: flex-end;
   margin-top: 1.5rem;
 }
 
@@ -171,7 +171,7 @@ body {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(240px, 420px);
   gap: 1.5rem;
-  align-items: end;
+  align-items: flex-end;
   margin-bottom: 2rem;
 }
 
@@ -205,7 +205,7 @@ body {
   grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
   gap: 1rem;
   margin-bottom: 1.75rem;
-  align-items: end;
+  align-items: flex-end;
 }
 
 .detail-toolbar {
@@ -288,7 +288,7 @@ body {
 .timeline-group-header {
   display: flex;
   justify-content: space-between;
-  align-items: end;
+  align-items: flex-end;
   gap: 1rem;
   padding-bottom: 0.9rem;
   border-bottom: 1px solid rgba(233, 180, 76, 0.1);
@@ -881,7 +881,7 @@ body {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(260px, 420px);
   gap: 1.5rem;
-  align-items: end;
+  align-items: flex-end;
 }
 
 .graph-canvas {
@@ -897,7 +897,7 @@ body {
 .graph-toolbar {
   display: flex;
   justify-content: space-between;
-  align-items: end;
+  align-items: flex-end;
   gap: 1rem;
   margin-bottom: 1rem;
   flex-wrap: wrap;
