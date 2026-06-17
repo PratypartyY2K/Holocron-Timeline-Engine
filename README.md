@@ -101,6 +101,11 @@ The frontend container now installs dependencies from `package-lock.json` with `
 dependency-sensitive UI changes such as graph layout packages are reproducible in Docker as
 well as local Node installs.
 
+When Docker Compose is running, port `8000` belongs to the containerized backend. If you also
+start the backend directly from `backend/.venv`, the browser will still talk to whichever process
+is bound to `localhost:8000`, which is usually the Docker container. Restart the Docker backend
+container when debugging browser-visible API issues against the Compose stack.
+
 Key endpoints:
 
 - frontend: `http://localhost:3000`
@@ -144,6 +149,26 @@ The transform step compiles raw fragments into `data/processed/dataset.json`.
 The ingest step resolves slug-based references and writes through the backend's
 service layer, so relationship validation and chronology rules are reused during
 import.
+
+### Backend Observability
+
+The backend now includes lightweight, server-side observability without exposing
+debug data to the frontend:
+
+- request logging with method, path, status code, and duration
+- Neo4j query timing in the repository layer
+- slow request and slow query warning logs
+
+These are controlled with environment variables:
+
+```text
+LOG_LEVEL=INFO
+SLOW_REQUEST_THRESHOLD_MS=1000
+SLOW_QUERY_THRESHOLD_MS=250
+```
+
+This instrumentation is log-only. It does not add response payload size, browser
+work, or page rendering overhead.
 
 ### Audit Relationship Integrity
 
@@ -284,6 +309,10 @@ source .venv/bin/activate
 uv sync --extra dev
 cp .env.example .env
 ```
+
+If you run the backend directly on the host machine while Neo4j is running in
+Docker, the runtime will normalize `bolt://neo4j:7687` to `bolt://localhost:7687`
+outside containers so the local backend can still connect to the database.
 
 Using `pip`:
 
