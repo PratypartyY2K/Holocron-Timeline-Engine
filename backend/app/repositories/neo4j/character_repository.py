@@ -35,7 +35,9 @@ class Neo4jCharacterRepository(Neo4jRepositoryBase, CharacterRepository):
         MATCH (c:Character {id: $character_id})
         RETURN properties(c) AS character
         """
-        record = self._run_single(query_name="character.get_by_id", query=query, character_id=character_id)
+        record = self._run_single(
+            query_name="character.get_by_id", query=query, character_id=character_id
+        )
         if record is None:
             return None
         return map_character_record(dict(record["character"]))

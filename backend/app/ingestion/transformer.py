@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from app.ingestion.models import (
@@ -96,4 +95,3 @@ def _merge_unique(store: dict[object, object], key: object, value: object, label
     if existing is not None and existing != value:
         raise ValueError(f"Conflicting duplicate {label}: {key}")
     store[key] = value
-

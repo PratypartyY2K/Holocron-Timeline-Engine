@@ -7,4 +7,3 @@ from app.domain.enums import NodeType
 class NodeReference:
     id: str
     node_type: NodeType
-

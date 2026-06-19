@@ -1,7 +1,7 @@
+from collections.abc import Mapping
 from copy import deepcopy
 from dataclasses import dataclass, field
 from threading import RLock
-from typing import Mapping
 
 from app.domain.entities.character import Character
 from app.domain.entities.event import Event
@@ -91,8 +91,12 @@ class UniverseStateService:
             projection_mode="graph-event-projection",
             notes=list(PROJECTION_NOTES),
             characters=sorted(projection_state.characters.values(), key=lambda item: item.name),
-            faction_control=sorted(projection_state.faction_control.values(), key=lambda item: item.planet_name),
-            artifacts=sorted(projection_state.artifacts.values(), key=lambda item: item.artifact_name),
+            faction_control=sorted(
+                projection_state.faction_control.values(), key=lambda item: item.planet_name
+            ),
+            artifacts=sorted(
+                projection_state.artifacts.values(), key=lambda item: item.artifact_name
+            ),
         )
 
     @staticmethod
@@ -130,7 +134,9 @@ class UniverseStateService:
         all_characters = self._character_repository.list_characters()
         characters_by_id = {character.id: character for character in all_characters}
         tracked_characters = {
-            character.slug: character for character in all_characters if character.slug in TRACKED_CHARACTER_SLUGS
+            character.slug: character
+            for character in all_characters
+            if character.slug in TRACKED_CHARACTER_SLUGS
         }
 
         base_state = self._build_base_state(
@@ -142,7 +148,9 @@ class UniverseStateService:
         all_mutations = []
         if sorted_events:
             latest_event = sorted_events[-1]
-            all_mutations = self._graph_repository.list_state_mutations_before_event(event_id=latest_event.id)
+            all_mutations = self._graph_repository.list_state_mutations_before_event(
+                event_id=latest_event.id
+            )
 
         mutations_by_event_id: dict[str, list[Relationship]] = {}
         for mutation in all_mutations:
@@ -204,7 +212,9 @@ class UniverseStateService:
     @staticmethod
     def _count_prior_events(sorted_events: list[Event], focus_event: Event) -> int:
         focus_key = UniverseStateService._sort_key(focus_event)
-        return sum(1 for event in sorted_events if UniverseStateService._sort_key(event) < focus_key)
+        return sum(
+            1 for event in sorted_events if UniverseStateService._sort_key(event) < focus_key
+        )
 
     @staticmethod
     def _build_base_state(
@@ -309,7 +319,9 @@ class UniverseStateService:
                 if artifact is None:
                     artifact = ArtifactLocationState(
                         artifact_key=mutation.artifact_key,
-                        artifact_name=ARTIFACT_NAMES.get(mutation.artifact_key, mutation.artifact_key),
+                        artifact_name=ARTIFACT_NAMES.get(
+                            mutation.artifact_key, mutation.artifact_key
+                        ),
                     )
                     state.artifacts[mutation.artifact_key] = artifact
                 holder = characters_by_id.get(mutation.to_node_id)

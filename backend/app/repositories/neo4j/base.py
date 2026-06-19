@@ -9,7 +9,6 @@ from neo4j import Driver
 from app.core.config import Settings
 from app.observability.neo4j import Neo4jQueryMonitor
 
-
 T = TypeVar("T")
 
 

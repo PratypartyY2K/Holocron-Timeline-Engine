@@ -1,5 +1,5 @@
-from app.domain.entities.character import Character
 from app.domain.entities.causal_graph import CausalGraph
+from app.domain.entities.character import Character
 from app.domain.entities.event import Event
 from app.domain.entities.event_impact import EventImpact
 from app.domain.entities.faction import Faction
@@ -84,7 +84,9 @@ class FakeEventRepository(EventRepository):
         return self.impacts.get(event_id, EventImpact(event_id=event_id))
 
     def get_break_simulation_graph(self, event_id: str) -> TimelineBreakSimulationGraph:
-        return self.break_simulation_graphs.get(event_id, TimelineBreakSimulationGraph(broken_event_id=event_id))
+        return self.break_simulation_graphs.get(
+            event_id, TimelineBreakSimulationGraph(broken_event_id=event_id)
+        )
 
 
 class FakeCharacterRepository(CharacterRepository):
@@ -197,7 +199,9 @@ class FakeGraphRepository(GraphRepository):
             or normalized_query in item.slug.casefold()
             or normalized_query in (item.description or "").casefold()
         ]
-        matches.sort(key=lambda item: (item.label.casefold(), item.entity_type, item.slug.casefold()))
+        matches.sort(
+            key=lambda item: (item.label.casefold(), item.entity_type, item.slug.casefold())
+        )
         return matches[:limit]
 
     def create_relationship(self, relationship: Relationship) -> Relationship:

@@ -4,12 +4,20 @@ import argparse
 from pathlib import Path
 
 from app.core.config import get_settings
-from app.ingestion.transformer import load_processed_dataset, transform_raw_directory, write_processed_dataset
+from app.ingestion.transformer import (
+    load_processed_dataset,
+    transform_raw_directory,
+    write_processed_dataset,
+)
 
 
 def transform_main() -> int:
-    parser = argparse.ArgumentParser(description="Transform raw contributor data into a canonical processed dataset.")
-    parser.add_argument("--raw-dir", default="data/raw", help="Directory containing raw dataset JSON files.")
+    parser = argparse.ArgumentParser(
+        description="Transform raw contributor data into a canonical processed dataset."
+    )
+    parser.add_argument(
+        "--raw-dir", default="data/raw", help="Directory containing raw dataset JSON files."
+    )
     parser.add_argument(
         "--output",
         default="data/processed/dataset.json",
@@ -46,7 +54,9 @@ def ingest_main() -> int:
     from app.repositories.neo4j.graph_repository import Neo4jGraphRepository
     from app.repositories.neo4j.planet_repository import Neo4jPlanetRepository
 
-    parser = argparse.ArgumentParser(description="Ingest a processed dataset into Neo4j through backend services.")
+    parser = argparse.ArgumentParser(
+        description="Ingest a processed dataset into Neo4j through backend services."
+    )
     parser.add_argument(
         "--input",
         default="data/processed/dataset.json",
@@ -63,10 +73,16 @@ def ingest_main() -> int:
     try:
         importer = DatasetImporter(
             event_service=EventService(Neo4jEventRepository(driver=driver, settings=settings)),
-            character_service=CharacterService(Neo4jCharacterRepository(driver=driver, settings=settings)),
+            character_service=CharacterService(
+                Neo4jCharacterRepository(driver=driver, settings=settings)
+            ),
             planet_service=PlanetService(Neo4jPlanetRepository(driver=driver, settings=settings)),
-            faction_service=FactionService(Neo4jFactionRepository(driver=driver, settings=settings)),
-            relationship_service=RelationshipService(Neo4jGraphRepository(driver=driver, settings=settings)),
+            faction_service=FactionService(
+                Neo4jFactionRepository(driver=driver, settings=settings)
+            ),
+            relationship_service=RelationshipService(
+                Neo4jGraphRepository(driver=driver, settings=settings)
+            ),
         )
         result = importer.import_dataset(dataset)
     finally:

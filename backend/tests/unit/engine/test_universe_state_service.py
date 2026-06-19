@@ -195,19 +195,38 @@ def test_state_before_battle_of_exegol_includes_earlier_character_deaths() -> No
 def test_state_projection_prefers_graph_mutation_edges_when_present() -> None:
     UniverseStateService.invalidate_projection_cache()
     event_repository = FakeEventRepository()
-    event_repository.create(Event("event-rise-empire", "rise-of-the-empire", "Rise of the Empire", None, -19, -19, None, None))
-    event_repository.create(Event("event-battle-yavin", "battle-of-yavin", "Battle of Yavin", None, 0, 0, None, None))
+    event_repository.create(
+        Event(
+            "event-rise-empire",
+            "rise-of-the-empire",
+            "Rise of the Empire",
+            None,
+            -19,
+            -19,
+            None,
+            None,
+        )
+    )
+    event_repository.create(
+        Event("event-battle-yavin", "battle-of-yavin", "Battle of Yavin", None, 0, 0, None, None)
+    )
 
     character_repository = FakeCharacterRepository()
-    character_repository.create(Character("char-tarkin", "grand-moff-tarkin", "Grand Moff Tarkin", None, None, None))
-    character_repository.create(Character("char-palpatine", "sheev-palpatine", "Sheev Palpatine", None, None, None))
+    character_repository.create(
+        Character("char-tarkin", "grand-moff-tarkin", "Grand Moff Tarkin", None, None, None)
+    )
+    character_repository.create(
+        Character("char-palpatine", "sheev-palpatine", "Sheev Palpatine", None, None, None)
+    )
 
     planet_repository = FakePlanetRepository()
     planet_repository.create(Planet("planet-coruscant", "coruscant", "Coruscant", None, None))
     planet_repository.create(Planet("planet-naboo", "naboo", "Naboo", None, None))
 
     faction_repository = FakeFactionRepository()
-    faction_repository.create(Faction("faction-republic", "galactic-republic", "Galactic Republic", None))
+    faction_repository.create(
+        Faction("faction-republic", "galactic-republic", "Galactic Republic", None)
+    )
     faction_repository.create(Faction("faction-empire", "galactic-empire", "Galactic Empire", None))
 
     graph_repository = FakeGraphRepository(
@@ -263,11 +282,17 @@ def test_state_projection_prefers_graph_mutation_edges_when_present() -> None:
 def test_state_without_graph_mutations_keeps_baseline_state() -> None:
     UniverseStateService.invalidate_projection_cache()
     event_repository = FakeEventRepository()
-    event_repository.create(Event("event-battle-yavin", "battle-of-yavin", "Battle of Yavin", None, 0, 0, None, None))
+    event_repository.create(
+        Event("event-battle-yavin", "battle-of-yavin", "Battle of Yavin", None, 0, 0, None, None)
+    )
 
     character_repository = FakeCharacterRepository()
-    character_repository.create(Character("char-tarkin", "grand-moff-tarkin", "Grand Moff Tarkin", None, None, None))
-    character_repository.create(Character("char-palpatine", "sheev-palpatine", "Sheev Palpatine", None, None, None))
+    character_repository.create(
+        Character("char-tarkin", "grand-moff-tarkin", "Grand Moff Tarkin", None, None, None)
+    )
+    character_repository.create(
+        Character("char-palpatine", "sheev-palpatine", "Sheev Palpatine", None, None, None)
+    )
 
     planet_repository = FakePlanetRepository()
     planet_repository.create(Planet("planet-coruscant", "coruscant", "Coruscant", None, None))
@@ -276,9 +301,13 @@ def test_state_without_graph_mutations_keeps_baseline_state() -> None:
     planet_repository.create(Planet("planet-geonosis", "geonosis", "Geonosis", None, None))
 
     faction_repository = FakeFactionRepository()
-    faction_repository.create(Faction("faction-republic", "galactic-republic", "Galactic Republic", None))
+    faction_repository.create(
+        Faction("faction-republic", "galactic-republic", "Galactic Republic", None)
+    )
     faction_repository.create(Faction("faction-empire", "galactic-empire", "Galactic Empire", None))
-    faction_repository.create(Faction("faction-cis", "cis", "Confederacy of Independent Systems", None))
+    faction_repository.create(
+        Faction("faction-cis", "cis", "Confederacy of Independent Systems", None)
+    )
 
     graph_repository = FakeGraphRepository(nodes=[make_node("event-battle-yavin", NodeType.EVENT)])
     graph_repository.event_chronology_by_id = {"event-battle-yavin": (0, 0)}

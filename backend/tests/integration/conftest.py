@@ -32,7 +32,9 @@ def neo4j_driver(integration_settings: Settings) -> Iterator[Driver]:
         driver.verify_connectivity()
     except (OSError, ServiceUnavailable, Neo4jError) as exc:
         driver.close()
-        pytest.skip(f"Neo4j integration tests require a local database at {integration_settings.neo4j_uri}: {exc}")
+        pytest.skip(
+            f"Neo4j integration tests require a local database at {integration_settings.neo4j_uri}: {exc}"
+        )
     try:
         yield driver
     finally:

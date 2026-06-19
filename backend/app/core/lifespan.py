@@ -11,4 +11,3 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     init_driver()
     yield
     close_driver()
-

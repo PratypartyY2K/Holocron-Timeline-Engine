@@ -92,7 +92,10 @@ def list_dependencies(
     depth: int | None = Query(default=None, ge=1),
     service: EventService = Depends(get_event_service),
 ) -> list[EventResponse]:
-    return [EventResponse.model_validate(item) for item in service.list_dependencies(event_id, depth=depth)]
+    return [
+        EventResponse.model_validate(item)
+        for item in service.list_dependencies(event_id, depth=depth)
+    ]
 
 
 @router.get("/{event_id}/consequences", response_model=list[EventResponse])
@@ -101,7 +104,10 @@ def list_consequences(
     depth: int | None = Query(default=None, ge=1),
     service: EventService = Depends(get_event_service),
 ) -> list[EventResponse]:
-    return [EventResponse.model_validate(item) for item in service.list_consequences(event_id, depth=depth)]
+    return [
+        EventResponse.model_validate(item)
+        for item in service.list_consequences(event_id, depth=depth)
+    ]
 
 
 @router.get("/{event_id}/causal-graph", response_model=CausalGraphResponse)

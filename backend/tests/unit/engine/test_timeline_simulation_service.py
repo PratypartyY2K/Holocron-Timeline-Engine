@@ -2,7 +2,10 @@ import pytest
 
 from app.domain.entities.causal_graph import CausalGraphEdge
 from app.domain.entities.event import Event
-from app.domain.entities.timeline_break_simulation import TimelineBreakSimulationGraph, TimelineNodeStatus
+from app.domain.entities.timeline_break_simulation import (
+    TimelineBreakSimulationGraph,
+    TimelineNodeStatus,
+)
 from app.domain.enums import RelationshipType
 from app.domain.errors import EntityNotFoundError
 from app.engine.services.timeline_simulation_service import TimelineSimulationService

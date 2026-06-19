@@ -20,7 +20,9 @@ class Neo4jGraphRepository(Neo4jRepositoryBase, GraphRepository):
         MATCH (n {id: $node_id})
         RETURN n.id AS id, labels(n) AS labels
         """
-        record = self._run_single(query_name="graph.get_node_reference", query=query, node_id=node_id)
+        record = self._run_single(
+            query_name="graph.get_node_reference", query=query, node_id=node_id
+        )
         if record is None:
             return None
         return map_node_reference({"id": record["id"], "labels": list(record["labels"])})
@@ -78,7 +80,9 @@ class Neo4jGraphRepository(Neo4jRepositoryBase, GraphRepository):
         MATCH (e:Event {id: $event_id})
         RETURN e.start_year AS start_year, e.end_year AS end_year
         """
-        record = self._run_single(query_name="graph.get_event_chronology", query=query, event_id=event_id)
+        record = self._run_single(
+            query_name="graph.get_event_chronology", query=query, event_id=event_id
+        )
         if record is None:
             return None
         return int(record["start_year"]), record["end_year"]
@@ -187,7 +191,9 @@ class Neo4jGraphRepository(Neo4jRepositoryBase, GraphRepository):
         }}]->(target)
         RETURN properties(r) AS relationship
         """
-        record = self._execute_write("graph.create_relationship", self._create_tx, query, relationship)
+        record = self._execute_write(
+            "graph.create_relationship", self._create_tx, query, relationship
+        )
         return map_relationship_record(record)
 
     @staticmethod

@@ -1,14 +1,15 @@
 from dataclasses import dataclass
+
 from app.domain.entities.event import Event
-from app.domain.errors import DuplicateEntityError
 from app.domain.enums import RelationshipType
+from app.domain.errors import DuplicateEntityError
 from app.engine.dto import CreateRelationshipCommand
+from app.engine.services.relationship_service import RelationshipService
 from app.engine.universe_state_catalog import CHARACTER_SLUG_ALIASES, MUTATION_ALIASES
 from app.repositories.interfaces.character_repository import CharacterRepository
 from app.repositories.interfaces.event_repository import EventRepository
 from app.repositories.interfaces.faction_repository import FactionRepository
 from app.repositories.interfaces.planet_repository import PlanetRepository
-from app.engine.services.relationship_service import RelationshipService
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,7 +89,9 @@ class TemporalMutationBackfillService:
     def _build_plan(
         self,
     ) -> tuple[list[tuple[Event, PlannedTemporalMutation]], list[str], list[str]]:
-        characters_by_slug = {item.slug: item for item in self._character_repository.list_characters()}
+        characters_by_slug = {
+            item.slug: item for item in self._character_repository.list_characters()
+        }
         planets_by_slug = {item.slug: item for item in self._planet_repository.list_planets()}
         factions_by_slug = {item.slug: item for item in self._faction_repository.list_factions()}
 
@@ -150,10 +153,14 @@ class TemporalMutationBackfillService:
                 planet = planets_by_slug.get(planet_slug)
                 faction = factions_by_slug.get(faction_slug)
                 if planet is None:
-                    skipped_missing_entities.append(f"{event.slug}: planet slug not found: {planet_slug}")
+                    skipped_missing_entities.append(
+                        f"{event.slug}: planet slug not found: {planet_slug}"
+                    )
                     continue
                 if faction is None:
-                    skipped_missing_entities.append(f"{event.slug}: faction slug not found: {faction_slug}")
+                    skipped_missing_entities.append(
+                        f"{event.slug}: faction slug not found: {faction_slug}"
+                    )
                     continue
                 plans.append(
                     (
@@ -171,7 +178,9 @@ class TemporalMutationBackfillService:
             for artifact_key, update in mutation.artifact_updates.items():
                 to_node_id: str
                 if update.holder_character_slug is not None:
-                    holder = self._resolve_character(characters_by_slug, update.holder_character_slug)
+                    holder = self._resolve_character(
+                        characters_by_slug, update.holder_character_slug
+                    )
                     if holder is None:
                         skipped_missing_entities.append(
                             f"{event.slug}: character slug not found: {update.holder_character_slug}"
@@ -199,7 +208,8 @@ class TemporalMutationBackfillService:
                             relationship_type=RelationshipType.SETS_ARTIFACT_LOCATION,
                             to_node_id=to_node_id,
                             artifact_key=artifact_key,
-                            note=update.note or f"Backfilled from curated catalog for {event.slug}.",
+                            note=update.note
+                            or f"Backfilled from curated catalog for {event.slug}.",
                         ),
                     )
                 )
@@ -218,7 +228,9 @@ class TemporalMutationBackfillService:
         return " | ".join(parts)
 
     @staticmethod
-    def _resolve_character(characters_by_slug: dict[str, object], character_slug: str) -> object | None:
+    def _resolve_character(
+        characters_by_slug: dict[str, object], character_slug: str
+    ) -> object | None:
         for candidate_slug in CHARACTER_SLUG_ALIASES.get(character_slug, (character_slug,)):
             character = characters_by_slug.get(candidate_slug)
             if character is not None:

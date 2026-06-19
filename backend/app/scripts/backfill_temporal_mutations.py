@@ -1,5 +1,7 @@
 import argparse
 
+from neo4j import GraphDatabase
+
 from app.core.config import get_settings
 from app.engine.services.relationship_service import RelationshipService
 from app.engine.services.temporal_mutation_backfill_service import TemporalMutationBackfillService
@@ -9,7 +11,6 @@ from app.repositories.neo4j.faction_repository import Neo4jFactionRepository
 from app.repositories.neo4j.graph_repository import Neo4jGraphRepository
 from app.repositories.neo4j.planet_repository import Neo4jPlanetRepository
 from app.scripts.neo4j_uri import normalize_cli_neo4j_uri
-from neo4j import GraphDatabase
 
 
 def main() -> int:

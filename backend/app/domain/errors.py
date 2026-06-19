@@ -20,4 +20,3 @@ class ChronologyError(ValidationError):
 
 class UnsupportedRelationshipError(ValidationError):
     pass
-

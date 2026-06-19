@@ -1,13 +1,21 @@
 import pytest
 
 from app.domain.enums import NodeType, RelationshipType
-from app.domain.errors import ChronologyError, DuplicateEntityError, EntityNotFoundError, UnsupportedRelationshipError, ValidationError
+from app.domain.errors import (
+    ChronologyError,
+    DuplicateEntityError,
+    EntityNotFoundError,
+    UnsupportedRelationshipError,
+    ValidationError,
+)
 from app.engine.dto import CreateRelationshipCommand
 from app.engine.services.relationship_service import RelationshipService
 from tests.unit.engine.fakes import FakeGraphRepository, make_node
 
 
-def seed_event(repository: FakeGraphRepository, event_id: str, start_year: int, end_year: int | None = None) -> None:
+def seed_event(
+    repository: FakeGraphRepository, event_id: str, start_year: int, end_year: int | None = None
+) -> None:
     repository.event_chronology_by_id[event_id] = (start_year, end_year)
 
 

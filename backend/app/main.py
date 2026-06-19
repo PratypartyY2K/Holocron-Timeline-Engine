@@ -1,12 +1,12 @@
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
 from app.api.errors import register_exception_handlers
 from app.api.router import api_router
 from app.core.config import get_settings
 from app.core.lifespan import lifespan
 from app.core.logging import configure_logging
 from app.observability.request_middleware import add_request_logging_middleware
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-
 
 settings = get_settings()
 configure_logging(settings.log_level)

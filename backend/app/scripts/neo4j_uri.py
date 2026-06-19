@@ -16,7 +16,9 @@ def normalize_neo4j_uri_to_localhost(uri: str) -> str:
         credentials = f"{credentials}@"
 
     normalized_netloc = f"{credentials}localhost:{port}"
-    return urlunsplit((parsed.scheme, normalized_netloc, parsed.path, parsed.query, parsed.fragment))
+    return urlunsplit(
+        (parsed.scheme, normalized_netloc, parsed.path, parsed.query, parsed.fragment)
+    )
 
 
 def normalize_cli_neo4j_uri(uri: str) -> str:

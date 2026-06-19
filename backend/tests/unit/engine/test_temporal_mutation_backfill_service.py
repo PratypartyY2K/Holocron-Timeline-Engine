@@ -18,10 +18,21 @@ from tests.unit.engine.fakes import (
 def make_backfill_service() -> tuple[TemporalMutationBackfillService, FakeGraphRepository]:
     event_repository = FakeEventRepository()
     for event in (
-        Event("event-rise-empire", "rise-of-the-empire", "Rise of the Empire", None, -19, -19, None, None),
+        Event(
+            "event-rise-empire",
+            "rise-of-the-empire",
+            "Rise of the Empire",
+            None,
+            -19,
+            -19,
+            None,
+            None,
+        ),
         Event("event-battle-yavin", "battle-of-yavin", "Battle of Yavin", None, 0, 0, None, None),
         Event("event-battle-crait", "battle-of-crait", "Battle of Crait", None, 34, 34, None, None),
-        Event("event-battle-exegol", "battle-of-exegol", "Battle of Exegol", None, 35, 35, None, None),
+        Event(
+            "event-battle-exegol", "battle-of-exegol", "Battle of Exegol", None, 35, 35, None, None
+        ),
     ):
         event_repository.create(event)
 

@@ -8,7 +8,9 @@ from app.schemas.graph import CreateRelationshipRequest, RelationshipResponse
 router = APIRouter()
 
 
-@router.post("/relationships", response_model=RelationshipResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/relationships", response_model=RelationshipResponse, status_code=status.HTTP_201_CREATED
+)
 def create_relationship(
     request: CreateRelationshipRequest,
     service: RelationshipService = Depends(get_relationship_service),

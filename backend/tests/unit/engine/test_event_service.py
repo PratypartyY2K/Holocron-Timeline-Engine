@@ -2,7 +2,12 @@ import pytest
 
 from app.domain.entities.event import Event
 from app.domain.entities.event_impact import EventImpact
-from app.domain.errors import ChronologyError, DuplicateEntityError, EntityNotFoundError, ValidationError
+from app.domain.errors import (
+    ChronologyError,
+    DuplicateEntityError,
+    EntityNotFoundError,
+    ValidationError,
+)
 from app.engine.dto import CreateEventCommand, ListEventsQuery
 from app.engine.services.event_service import EventService
 from tests.unit.engine.fakes import FakeEventRepository

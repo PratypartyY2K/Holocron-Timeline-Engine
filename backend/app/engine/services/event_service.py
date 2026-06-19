@@ -3,7 +3,12 @@ from uuid import uuid4
 from app.domain.entities.causal_graph import CausalGraph
 from app.domain.entities.event import Event
 from app.domain.entities.event_impact import EventImpact
-from app.domain.errors import ChronologyError, DuplicateEntityError, EntityNotFoundError, ValidationError
+from app.domain.errors import (
+    ChronologyError,
+    DuplicateEntityError,
+    EntityNotFoundError,
+    ValidationError,
+)
 from app.engine.dto import CreateEventCommand, ListEventsQuery
 from app.engine.services.universe_state_service import UniverseStateService
 from app.repositories.interfaces.event_repository import EventRepository
@@ -53,7 +58,11 @@ class EventService:
             raise ValidationError("offset must be greater than or equal to 0")
         if query.order not in {"asc", "desc"}:
             raise ValidationError("order must be 'asc' or 'desc'")
-        if query.start_year is not None and query.end_year is not None and query.end_year < query.start_year:
+        if (
+            query.start_year is not None
+            and query.end_year is not None
+            and query.end_year < query.start_year
+        ):
             raise ChronologyError("end_year must be greater than or equal to start_year")
         if query.causal_depth is not None and query.causal_depth <= 0:
             raise ValidationError("causal_depth must be greater than 0")

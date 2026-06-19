@@ -23,8 +23,13 @@ class GraphAwareEventRepository(FakeEventRepository):
 
     def create(self, event):
         created = super().create(event)
-        self._graph_repository.nodes_by_id[created.id] = NodeReference(id=created.id, node_type=NodeType.EVENT)
-        self._graph_repository.event_chronology_by_id[created.id] = (created.start_year, created.end_year)
+        self._graph_repository.nodes_by_id[created.id] = NodeReference(
+            id=created.id, node_type=NodeType.EVENT
+        )
+        self._graph_repository.event_chronology_by_id[created.id] = (
+            created.start_year,
+            created.end_year,
+        )
         return created
 
 
@@ -35,7 +40,9 @@ class GraphAwareCharacterRepository(FakeCharacterRepository):
 
     def create(self, character):
         created = super().create(character)
-        self._graph_repository.nodes_by_id[created.id] = NodeReference(id=created.id, node_type=NodeType.CHARACTER)
+        self._graph_repository.nodes_by_id[created.id] = NodeReference(
+            id=created.id, node_type=NodeType.CHARACTER
+        )
         return created
 
 
@@ -46,7 +53,9 @@ class GraphAwarePlanetRepository(FakePlanetRepository):
 
     def create(self, planet):
         created = super().create(planet)
-        self._graph_repository.nodes_by_id[created.id] = NodeReference(id=created.id, node_type=NodeType.PLANET)
+        self._graph_repository.nodes_by_id[created.id] = NodeReference(
+            id=created.id, node_type=NodeType.PLANET
+        )
         return created
 
 
@@ -57,7 +66,9 @@ class GraphAwareFactionRepository(FakeFactionRepository):
 
     def create(self, faction):
         created = super().create(faction)
-        self._graph_repository.nodes_by_id[created.id] = NodeReference(id=created.id, node_type=NodeType.FACTION)
+        self._graph_repository.nodes_by_id[created.id] = NodeReference(
+            id=created.id, node_type=NodeType.FACTION
+        )
         return created
 
 

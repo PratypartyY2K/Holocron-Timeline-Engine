@@ -1,17 +1,17 @@
+import app.engine.services.universe_state_service as universe_state_module
+from app.domain.entities.character import Character
+from app.domain.entities.event import Event
+from app.domain.entities.faction import Faction
+from app.domain.entities.planet import Planet
 from app.domain.enums import RelationshipType
 from app.engine.dto import CreateRelationshipCommand
 from app.engine.services.relationship_service import RelationshipService
 from app.engine.services.universe_state_service import UniverseStateService
-import app.engine.services.universe_state_service as universe_state_module
 from app.repositories.neo4j.character_repository import Neo4jCharacterRepository
 from app.repositories.neo4j.event_repository import Neo4jEventRepository
 from app.repositories.neo4j.faction_repository import Neo4jFactionRepository
 from app.repositories.neo4j.graph_repository import Neo4jGraphRepository
 from app.repositories.neo4j.planet_repository import Neo4jPlanetRepository
-from app.domain.entities.character import Character
-from app.domain.entities.event import Event
-from app.domain.entities.faction import Faction
-from app.domain.entities.planet import Planet
 
 
 def test_create_temporal_mutation_relationship_persists_payload_to_neo4j(

@@ -13,4 +13,6 @@ def search(
     limit: int = Query(default=10, ge=1, le=25),
     service: SearchService = Depends(get_search_service),
 ) -> list[SearchResultResponse]:
-    return [SearchResultResponse.model_validate(item) for item in service.search(query=q, limit=limit)]
+    return [
+        SearchResultResponse.model_validate(item) for item in service.search(query=q, limit=limit)
+    ]

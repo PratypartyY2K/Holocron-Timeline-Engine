@@ -3,24 +3,21 @@ from datetime import datetime
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app.domain.entities.relationship import Relationship
-from app.domain.enums import RelationshipType
-from app.domain.errors import UnsupportedRelationshipError
-from app.engine.dto import CreateRelationshipCommand
-
 from app.api.dependencies.services import get_event_service, get_relationship_service
 from app.api.errors import register_exception_handlers
 from app.api.router import api_router
 from app.domain.entities.event import Event
+from app.domain.entities.relationship import Relationship
+from app.domain.enums import RelationshipType
+from app.domain.errors import UnsupportedRelationshipError
+from app.engine.dto import CreateRelationshipCommand
 from app.engine.services.event_service import EventService
 from tests.unit.engine.fakes import FakeEventRepository
 
 
 class RaisingRelationshipService:
     def create_relationship(self, command: CreateRelationshipCommand) -> Relationship:
-        raise UnsupportedRelationshipError(
-            f"Unsupported relationship type: {command.type.value}"
-        )
+        raise UnsupportedRelationshipError(f"Unsupported relationship type: {command.type.value}")
 
 
 def make_app(
@@ -96,7 +93,10 @@ def test_create_event_rejects_invalid_chronology_payload() -> None:
     )
 
     assert response.status_code == 422
-    assert response.json()["detail"][0]["msg"] == "Value error, end_year must be greater than or equal to start_year"
+    assert (
+        response.json()["detail"][0]["msg"]
+        == "Value error, end_year must be greater than or equal to start_year"
+    )
 
 
 def test_list_dependencies_returns_serialized_events() -> None:

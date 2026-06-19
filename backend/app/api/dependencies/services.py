@@ -21,7 +21,9 @@ def get_event_repository(settings: Settings = Depends(get_settings)) -> Neo4jEve
     return Neo4jEventRepository(driver=get_driver(), settings=settings)
 
 
-def get_character_repository(settings: Settings = Depends(get_settings)) -> Neo4jCharacterRepository:
+def get_character_repository(
+    settings: Settings = Depends(get_settings),
+) -> Neo4jCharacterRepository:
     return Neo4jCharacterRepository(driver=get_driver(), settings=settings)
 
 

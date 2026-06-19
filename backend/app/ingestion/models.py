@@ -49,7 +49,7 @@ class EventRecord(BaseModel):
         return list(dict.fromkeys(normalized))
 
     @model_validator(mode="after")
-    def validate_chronology(self) -> "EventRecord":
+    def validate_chronology(self) -> EventRecord:
         if self.end_year is not None and self.end_year < self.start_year:
             raise ValueError("end_year must be greater than or equal to start_year")
         return self

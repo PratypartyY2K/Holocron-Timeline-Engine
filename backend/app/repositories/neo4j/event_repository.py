@@ -135,7 +135,9 @@ class Neo4jEventRepository(Neo4jRepositoryBase, EventRepository):
         order: str,
     ) -> tuple[list[Event], int]:
         direction = "ASC" if order == "asc" else "DESC"
-        semantic_filter = self._build_semantic_filter(character=character, location=location, causal_depth=causal_depth)
+        semantic_filter = self._build_semantic_filter(
+            character=character, location=location, causal_depth=causal_depth
+        )
         query = f"""
         MATCH (e:Event)
         WHERE ($start_year IS NULL OR e.start_year >= $start_year)
@@ -200,6 +202,7 @@ class Neo4jEventRepository(Neo4jRepositoryBase, EventRepository):
             "limit": limit,
             "offset": offset,
         }
+
         def operation() -> tuple[list[Any], Any]:
             with self._driver.session(database=self._database) as session:
                 event_records = list(session.run(query, **params))
@@ -374,6 +377,7 @@ class Neo4jEventRepository(Neo4jRepositoryBase, EventRepository):
             faction_names: faction_names
         } AS event
         """
+
         def operation() -> tuple[list[dict[str, Any]], list[Event]]:
             with self._driver.session(database=self._database) as session:
                 edge_record = session.run(edge_query, event_id=event_id, depth=depth).single()
@@ -466,6 +470,7 @@ class Neo4jEventRepository(Neo4jRepositoryBase, EventRepository):
             faction_names: faction_names
         } AS event
         """
+
         def operation() -> tuple[list[dict[str, Any]], list[Event]]:
             with self._driver.session(database=self._database) as session:
                 edge_record = session.run(edge_query, event_id=event_id).single()
@@ -479,7 +484,9 @@ class Neo4jEventRepository(Neo4jRepositoryBase, EventRepository):
                         impacted_node_ids.add(edge["target_id"])
 
                 node_result = session.run(node_query, node_ids=list(impacted_node_ids))
-                impacted_events = [map_event_record(dict(record["event"])) for record in node_result]
+                impacted_events = [
+                    map_event_record(dict(record["event"])) for record in node_result
+                ]
                 return raw_edges, impacted_events
 
         raw_edges, impacted_events = self._measure_query("event.get_impact", operation)
@@ -531,15 +538,23 @@ class Neo4jEventRepository(Neo4jRepositoryBase, EventRepository):
 
         def operation() -> tuple[list[Event], list[CausalGraphEdge], dict[str, list[str]]]:
             with self._driver.session(database=self._database) as session:
-                downstream_ids_record = session.run(downstream_ids_query, event_id=event_id).single()
-                downstream_ids = [] if downstream_ids_record is None else list(downstream_ids_record["downstream_ids"])
+                downstream_ids_record = session.run(
+                    downstream_ids_query, event_id=event_id
+                ).single()
+                downstream_ids = (
+                    []
+                    if downstream_ids_record is None
+                    else list(downstream_ids_record["downstream_ids"])
+                )
                 simulation_ids = [event_id, *downstream_ids]
 
                 node_result = session.run(node_query, node_ids=simulation_ids)
                 edge_result = session.run(edge_query, simulation_ids=simulation_ids)
                 dependency_result = session.run(dependency_query, downstream_ids=downstream_ids)
 
-                downstream_events = [map_event_record(dict(record["event"])) for record in node_result]
+                downstream_events = [
+                    map_event_record(dict(record["event"])) for record in node_result
+                ]
                 internal_edges = [
                     CausalGraphEdge(
                         id=record["edge"]["id"],
@@ -608,7 +623,9 @@ class Neo4jEventRepository(Neo4jRepositoryBase, EventRepository):
         return f"*1..{depth}"
 
     @staticmethod
-    def _build_semantic_filter(*, character: str | None, location: str | None, causal_depth: int | None) -> str:
+    def _build_semantic_filter(
+        *, character: str | None, location: str | None, causal_depth: int | None
+    ) -> str:
         direct_conditions: list[str] = []
         if character is not None:
             direct_conditions.append(

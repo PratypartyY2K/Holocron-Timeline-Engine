@@ -49,7 +49,9 @@ class TimelineSimulationService:
                     queue.append(target_id)
 
         if len(topological_order) != len(nodes_by_id):
-            remaining_ids = sorted(event_id for event_id in nodes_by_id if event_id not in topological_order)
+            remaining_ids = sorted(
+                event_id for event_id in nodes_by_id if event_id not in topological_order
+            )
             topological_order.extend(remaining_ids)
 
         statuses: dict[str, TimelineNodeStatus] = {broken_event.id: TimelineNodeStatus.BROKEN}
@@ -70,7 +72,8 @@ class TimelineSimulationService:
             broken_dependency_ids = sorted(
                 dependency_id
                 for dependency_id in dependency_ids
-                if statuses.get(dependency_id) in {TimelineNodeStatus.BROKEN, TimelineNodeStatus.INVALIDATED}
+                if statuses.get(dependency_id)
+                in {TimelineNodeStatus.BROKEN, TimelineNodeStatus.INVALIDATED}
             )
             unresolved_dependency_ids = sorted(
                 dependency_id
@@ -80,7 +83,8 @@ class TimelineSimulationService:
             surviving_dependency_ids = sorted(
                 dependency_id
                 for dependency_id in dependency_ids
-                if dependency_id not in statuses or statuses.get(dependency_id) is TimelineNodeStatus.ACTIVE
+                if dependency_id not in statuses
+                or statuses.get(dependency_id) is TimelineNodeStatus.ACTIVE
             )
 
             status = (
@@ -95,7 +99,9 @@ class TimelineSimulationService:
                     event=nodes_by_id[current_id],
                     status=status,
                     topological_rank=rank,
-                    affected_by_event_ids=sorted(set(broken_dependency_ids + unresolved_dependency_ids)),
+                    affected_by_event_ids=sorted(
+                        set(broken_dependency_ids + unresolved_dependency_ids)
+                    ),
                     surviving_dependency_count=len(surviving_dependency_ids),
                     broken_dependency_count=len(broken_dependency_ids),
                     unresolved_dependency_count=len(unresolved_dependency_ids),
@@ -103,7 +109,12 @@ class TimelineSimulationService:
             )
 
         simulation_nodes.sort(
-            key=lambda item: (item.topological_rank, item.event.start_year, item.event.title, item.event.id)
+            key=lambda item: (
+                item.topological_rank,
+                item.event.start_year,
+                item.event.title,
+                item.event.id,
+            )
         )
         return TimelineBreakSimulation(
             broken_event_id=broken_event.id,

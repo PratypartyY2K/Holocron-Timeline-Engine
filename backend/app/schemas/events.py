@@ -1,8 +1,9 @@
 from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-from app.domain.enums import RelationshipType
+
 from app.domain.entities.timeline_break_simulation import TimelineNodeStatus
+from app.domain.enums import RelationshipType
 
 
 class CreateEventRequest(BaseModel):

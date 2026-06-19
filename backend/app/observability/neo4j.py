@@ -4,12 +4,13 @@ import logging
 from time import perf_counter
 from typing import TypeVar
 
-
 T = TypeVar("T")
 
 
 class Neo4jQueryMonitor:
-    def __init__(self, *, slow_query_threshold_ms: float, logger: logging.Logger | None = None) -> None:
+    def __init__(
+        self, *, slow_query_threshold_ms: float, logger: logging.Logger | None = None
+    ) -> None:
         self._slow_query_threshold_ms = slow_query_threshold_ms
         self._logger = logger or logging.getLogger("app.observability.neo4j")
 

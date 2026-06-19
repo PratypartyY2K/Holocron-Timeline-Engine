@@ -2,11 +2,16 @@ from uuid import uuid4
 
 from app.domain.entities.relationship import Relationship
 from app.domain.enums import NodeType, RelationshipType
-from app.domain.errors import ChronologyError, DuplicateEntityError, EntityNotFoundError, UnsupportedRelationshipError, ValidationError
+from app.domain.errors import (
+    ChronologyError,
+    DuplicateEntityError,
+    EntityNotFoundError,
+    UnsupportedRelationshipError,
+    ValidationError,
+)
 from app.engine.dto import CreateRelationshipCommand
 from app.engine.services.universe_state_service import UniverseStateService
 from app.repositories.interfaces.graph_repository import GraphRepository
-
 
 ALLOWED_RELATIONSHIP_NODE_TYPES: dict[RelationshipType, set[tuple[NodeType, NodeType]]] = {
     RelationshipType.CAUSES: {(NodeType.EVENT, NodeType.EVENT)},

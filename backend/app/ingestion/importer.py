@@ -154,7 +154,9 @@ class DatasetImporter:
                     from_node_id=self._resolve_node_id(record.source),
                     to_node_id=self._resolve_node_id(record.target),
                     note=record.note,
-                    subject_node_id=self._resolve_node_id(record.subject) if record.subject is not None else None,
+                    subject_node_id=self._resolve_node_id(record.subject)
+                    if record.subject is not None
+                    else None,
                     artifact_key=record.artifact_key,
                     value_bool=record.value_bool,
                     value_text=record.value_text,
@@ -175,4 +177,3 @@ class DatasetImporter:
         if ref.type is NodeType.FACTION:
             return self._faction_service.get_faction_by_slug(ref.slug).id
         raise ValueError(f"Unsupported node type: {ref.type}")
-
