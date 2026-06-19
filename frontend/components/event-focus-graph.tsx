@@ -111,19 +111,12 @@ function eventChronology(event: GraphSourceNode): string {
   return `${formatChronology(event.start_year)} to ${formatChronology(event.end_year)}`;
 }
 
-function formatCentrality(value: number): string {
-  return value.toFixed(2);
-}
-
 function buildLabel(event: EventRecord): ReactNode {
   return (
     <div className="graph-node">
       <div className="graph-node-chronology">{eventChronology(event)}</div>
       <div className="graph-node-title">{event.title}</div>
       <div className="graph-node-era">{event.era ?? "Unclassified era"}</div>
-      <div className="graph-node-meta">
-        Importance {formatCentrality(event.centrality_score)} · {event.dependency_count} deps
-      </div>
       <div className="graph-node-meta">
         {event.faction_names.length > 0 ? event.faction_names.join(", ") : "No faction tags"}
       </div>
@@ -152,9 +145,6 @@ function buildSimulationLabel(
             : event.status === "unresolved"
               ? "Unresolved"
               : "Active"}
-      </div>
-      <div className="graph-node-meta">
-        Importance {formatCentrality(event.centrality_score)} · {event.dependency_count} deps
       </div>
       <div className="graph-node-meta">
         {event.faction_names.length > 0 ? event.faction_names.join(", ") : "No faction tags"}
