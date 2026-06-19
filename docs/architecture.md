@@ -199,7 +199,18 @@ The API returns a `TimelineBreakSimulationResponse` containing:
 - causal edges
 - the computed topological order
 
-The frontend uses that payload to swap the canonical event graph into an alternate branch view.
+The frontend uses that payload in a single long-lived React Flow canvas. Instead of remounting a separate what-if graph, it derives the active node and edge set from either the canonical graph or the simulation response, reruns Dagre layout over that active dataset, and applies status-based styling for `broken`, `invalidated`, and `unresolved` nodes.
+
+### Frontend Graph Rendering
+
+The event detail graph keeps one React Flow instance alive across canonical and what-if states:
+
+- canonical and simulation views share the same graph component
+- nodes and edges are recomputed from the active dataset rather than namespaced into a separate canvas
+- Dagre layout is rerun when the active graph changes
+- simulation state is expressed through node and edge styling instead of remount-driven graph replacement
+
+This reduces the risk of stale event handlers, orphaned DOM nodes, and unnecessary React Flow churn when toggling the what-if simulation on large graphs.
 
 ## Mutation System
 
