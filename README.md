@@ -76,6 +76,12 @@ Request flow:
 - [API](docs/api.md)
 - [Engineering Design](docs/engineering-design.md)
 
+### Documentation
+
+- Architecture diagrams: HLD and LLD views in [docs/architecture.md](docs/architecture.md)
+- Data model overview and relationship model in [docs/architecture.md](docs/architecture.md)
+- Example API and graph queries in [docs/api.md](docs/api.md) and [docs/architecture.md](docs/architecture.md)
+
 ## Local Development
 
 Run the full stack with Docker Compose:

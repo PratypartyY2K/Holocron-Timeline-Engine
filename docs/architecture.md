@@ -13,6 +13,50 @@ High-level flow:
 
 `Frontend -> /api/v1 routes -> engine services -> Neo4j repositories -> Neo4j`
 
+## Architecture Diagrams
+
+### HLD
+
+```text
++-------------------+       +-------------------+       +-------------------+
+| Next.js Frontend  | ----> | FastAPI API Layer | ----> | Engine Services   |
++-------------------+       +-------------------+       +-------------------+
+                                                              |
+                                                              v
+                                                     +-------------------+
+                                                     | Neo4j Repositories|
+                                                     +-------------------+
+                                                              |
+                                                              v
+                                                     +-------------------+
+                                                     | Neo4j Graph Store |
+                                                     +-------------------+
+```
+
+### LLD
+
+```text
+frontend/app + components
+        |
+        v
+backend/app/api/routes
+        |
+        v
+backend/app/api/dependencies
+        |
+        v
+backend/app/engine/services
+        |
+        v
+backend/app/repositories/interfaces
+        |
+        v
+backend/app/repositories/neo4j
+        |
+        v
+backend/app/domain + backend/app/schemas
+```
+
 ## System Structure
 
 ### Frontend
@@ -62,6 +106,24 @@ The main relationship categories are:
 - `SETS_ARTIFACT_LOCATION`
 
 The first six relationships describe graph structure and archive semantics. The `SETS_*` relationships are temporal mutations used to project timeline state over time.
+
+## Data Model Diagram
+
+```text
+(Event)-[:CAUSES]->(Event)
+(Event)-[:INVOLVES]->(Character)
+(Event)-[:INVOLVES]->(Faction)
+(Event)-[:LOCATED_IN]->(Planet)
+(Character)-[:LOCATED_IN]->(Planet)
+(Character)-[:MEMBER_OF]->(Faction)
+(Faction)-[:ALLIED_WITH]->(Faction)
+(Faction)-[:ENEMY_OF]->(Faction)
+
+(Event)-[:SETS_ALIVE_STATE]->(Character)
+(Event)-[:SETS_CHARACTER_LOCATION {subject_node_id=Character}]->(Planet)
+(Event)-[:SETS_PLANET_CONTROL {subject_node_id=Planet}]->(Faction)
+(Event)-[:SETS_ARTIFACT_LOCATION {artifact_key=...}]->(Character|Planet)
+```
 
 ## Simulation Engine
 
@@ -188,3 +250,31 @@ Archive content is prepared outside the HTTP layer:
 - `scripts/audit/relationship_integrity.cypher` audits data integrity in the graph
 
 This keeps import logic reproducible and lets the project reuse service-layer validation during ingest.
+
+## Example Queries
+
+Example Cypher patterns used by the system:
+
+```cypher
+MATCH (source:Event)-[:CAUSES*1..]->(target:Event {id: $event_id})
+RETURN DISTINCT source
+ORDER BY source.start_year ASC, source.title ASC
+```
+
+```cypher
+MATCH (source:Event {id: $event_id})-[:CAUSES*1..]->(target:Event)
+RETURN DISTINCT target
+ORDER BY target.start_year ASC, target.title ASC
+```
+
+```cypher
+MATCH (focus:Event {id: $event_id})
+MATCH (source:Event)-[r]->()
+WHERE type(r) IN [
+  "SETS_ALIVE_STATE",
+  "SETS_CHARACTER_LOCATION",
+  "SETS_PLANET_CONTROL",
+  "SETS_ARTIFACT_LOCATION"
+]
+RETURN properties(r) AS relationship
+```
