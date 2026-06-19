@@ -52,6 +52,8 @@ export function useAsyncData<T>(
     return () => {
       isActive = false;
     };
+    // This hook intentionally accepts a caller-provided dependency list.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, dependencies);
 
   return state;
