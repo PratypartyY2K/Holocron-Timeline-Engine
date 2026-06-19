@@ -111,6 +111,37 @@ class UniverseStateService:
             return cache_cls._projection_cache
 
     def _build_projection_cache(self) -> _ProjectionCache:
+        sorted_events = self._list_sorted_events()
+        events_by_id = {event.id: event for event in sorted_events}
+        planets_by_slug, planets_by_id = self._load_planet_maps()
+        factions_by_slug, factions_by_id = self._load_faction_maps()
+        tracked_characters, characters_by_id = self._load_character_maps()
+        base_state = self._build_base_state(
+            tracked_characters=tracked_characters,
+            planets_by_slug=planets_by_slug,
+            factions_by_slug=factions_by_slug,
+        )
+        mutations_by_event_id = self._load_mutations_by_event_id(sorted_events)
+        checkpoints = self._build_checkpoints(
+            sorted_events=sorted_events,
+            base_state=base_state,
+            mutations_by_event_id=mutations_by_event_id,
+            characters_by_id=characters_by_id,
+            planets_by_id=planets_by_id,
+            factions_by_id=factions_by_id,
+        )
+        return _ProjectionCache(
+            events_by_id=events_by_id,
+            sorted_events=sorted_events,
+            characters_by_id=characters_by_id,
+            planets_by_id=planets_by_id,
+            factions_by_id=factions_by_id,
+            mutations_by_event_id=mutations_by_event_id,
+            checkpoints=checkpoints,
+            base_state=base_state,
+        )
+
+    def _list_sorted_events(self) -> list[Event]:
         events, _ = self._event_repository.list_events(
             start_year=None,
             end_year=None,
@@ -122,40 +153,56 @@ class UniverseStateService:
             offset=0,
             order="asc",
         )
-        sorted_events = sorted(events, key=self._sort_key)
-        events_by_id = {event.id: event for event in sorted_events}
+        return sorted(events, key=self._sort_key)
 
+    def _load_planet_maps(self) -> tuple[dict[str, Planet], dict[str, Planet]]:
         all_planets = self._planet_repository.list_planets()
-        planets_by_slug = {planet.slug: planet for planet in all_planets}
-        planets_by_id = {planet.id: planet for planet in all_planets}
-        all_factions = self._faction_repository.list_factions()
-        factions_by_slug = {faction.slug: faction for faction in all_factions}
-        factions_by_id = {faction.id: faction for faction in all_factions}
-        all_characters = self._character_repository.list_characters()
-        characters_by_id = {character.id: character for character in all_characters}
-        tracked_characters = {
-            character.slug: character
-            for character in all_characters
-            if character.slug in TRACKED_CHARACTER_SLUGS
-        }
-
-        base_state = self._build_base_state(
-            tracked_characters=tracked_characters,
-            planets_by_slug=planets_by_slug,
-            factions_by_slug=factions_by_slug,
+        return (
+            {planet.slug: planet for planet in all_planets},
+            {planet.id: planet for planet in all_planets},
         )
 
-        all_mutations = []
-        if sorted_events:
-            latest_event = sorted_events[-1]
-            all_mutations = self._graph_repository.list_state_mutations_before_event(
-                event_id=latest_event.id
-            )
+    def _load_faction_maps(self) -> tuple[dict[str, Faction], dict[str, Faction]]:
+        all_factions = self._faction_repository.list_factions()
+        return (
+            {faction.slug: faction for faction in all_factions},
+            {faction.id: faction for faction in all_factions},
+        )
 
+    def _load_character_maps(self) -> tuple[dict[str, Character], dict[str, Character]]:
+        all_characters = self._character_repository.list_characters()
+        return (
+            {
+                character.slug: character
+                for character in all_characters
+                if character.slug in TRACKED_CHARACTER_SLUGS
+            },
+            {character.id: character for character in all_characters},
+        )
+
+    def _load_mutations_by_event_id(self, sorted_events: list[Event]) -> dict[str, list[Relationship]]:
+        if not sorted_events:
+            return {}
+
+        latest_event = sorted_events[-1]
+        all_mutations = self._graph_repository.list_state_mutations_before_event(
+            event_id=latest_event.id
+        )
         mutations_by_event_id: dict[str, list[Relationship]] = {}
         for mutation in all_mutations:
             mutations_by_event_id.setdefault(mutation.from_node_id, []).append(mutation)
+        return mutations_by_event_id
 
+    def _build_checkpoints(
+        self,
+        *,
+        sorted_events: list[Event],
+        base_state: _ProjectionState,
+        mutations_by_event_id: Mapping[str, list[Relationship]],
+        characters_by_id: Mapping[str, Character],
+        planets_by_id: Mapping[str, Planet],
+        factions_by_id: Mapping[str, Faction],
+    ) -> list[tuple[tuple[int, str, str], str, _ProjectionState]]:
         state_after_event = deepcopy(base_state)
         checkpoints: list[tuple[tuple[int, str, str], str, _ProjectionState]] = []
         for index, event in enumerate(sorted_events):
@@ -169,17 +216,7 @@ class UniverseStateService:
             next_event = sorted_events[index + 1] if index + 1 < len(sorted_events) else None
             if next_event is None or next_event.era != event.era:
                 checkpoints.append((self._sort_key(event), event.id, deepcopy(state_after_event)))
-
-        return _ProjectionCache(
-            events_by_id=events_by_id,
-            sorted_events=sorted_events,
-            characters_by_id=characters_by_id,
-            planets_by_id=planets_by_id,
-            factions_by_id=factions_by_id,
-            mutations_by_event_id=mutations_by_event_id,
-            checkpoints=checkpoints,
-            base_state=base_state,
-        )
+        return checkpoints
 
     def _state_before_event(self, cache: _ProjectionCache, focus_event: Event) -> _ProjectionState:
         focus_key = self._sort_key(focus_event)
@@ -283,51 +320,112 @@ class UniverseStateService:
     ) -> None:
         for mutation in mutations:
             if mutation.type is RelationshipType.SETS_ALIVE_STATE:
-                character = characters_by_id.get(mutation.to_node_id)
-                state_item = None if character is None else state.characters.get(character.slug)
-                if state_item is not None and mutation.value_bool is not None:
-                    state_item.is_alive = mutation.value_bool
-
-            elif mutation.type is RelationshipType.SETS_CHARACTER_LOCATION:
-                if mutation.subject_node_id is None:
-                    continue
-                character = characters_by_id.get(mutation.subject_node_id)
-                planet = planets_by_id.get(mutation.to_node_id)
-                state_item = None if character is None else state.characters.get(character.slug)
-                if state_item is not None and planet is not None:
-                    state_item.location_planet_slug = planet.slug
-                    state_item.location_planet_name = planet.name
-
-            elif mutation.type is RelationshipType.SETS_PLANET_CONTROL:
-                if mutation.subject_node_id is None:
-                    continue
-                planet = planets_by_id.get(mutation.subject_node_id)
-                faction = factions_by_id.get(mutation.to_node_id)
-                if planet is None or faction is None:
-                    continue
-                state.faction_control[planet.slug] = FactionControlState(
-                    planet_slug=planet.slug,
-                    planet_name=planet.name,
-                    faction_slug=faction.slug,
-                    faction_name=faction.name,
+                UniverseStateService._apply_alive_state_mutation(
+                    state, mutation, characters_by_id=characters_by_id
+                )
+                continue
+            if mutation.type is RelationshipType.SETS_CHARACTER_LOCATION:
+                UniverseStateService._apply_character_location_mutation(
+                    state,
+                    mutation,
+                    characters_by_id=characters_by_id,
+                    planets_by_id=planets_by_id,
+                )
+                continue
+            if mutation.type is RelationshipType.SETS_PLANET_CONTROL:
+                UniverseStateService._apply_planet_control_mutation(
+                    state,
+                    mutation,
+                    planets_by_id=planets_by_id,
+                    factions_by_id=factions_by_id,
+                )
+                continue
+            if mutation.type is RelationshipType.SETS_ARTIFACT_LOCATION:
+                UniverseStateService._apply_artifact_location_mutation(
+                    state,
+                    mutation,
+                    characters_by_id=characters_by_id,
+                    planets_by_id=planets_by_id,
                 )
 
-            elif mutation.type is RelationshipType.SETS_ARTIFACT_LOCATION:
-                if mutation.artifact_key is None:
-                    continue
-                artifact = state.artifacts.get(mutation.artifact_key)
-                if artifact is None:
-                    artifact = ArtifactLocationState(
-                        artifact_key=mutation.artifact_key,
-                        artifact_name=ARTIFACT_NAMES.get(
-                            mutation.artifact_key, mutation.artifact_key
-                        ),
-                    )
-                    state.artifacts[mutation.artifact_key] = artifact
-                holder = characters_by_id.get(mutation.to_node_id)
-                planet = planets_by_id.get(mutation.to_node_id)
-                artifact.holder_character_slug = holder.slug if holder is not None else None
-                artifact.holder_character_name = holder.name if holder is not None else None
-                artifact.location_planet_slug = planet.slug if planet is not None else None
-                artifact.location_planet_name = planet.name if planet is not None else None
-                artifact.note = mutation.note or mutation.value_text
+    @staticmethod
+    def _apply_alive_state_mutation(
+        state: _ProjectionState,
+        mutation: Relationship,
+        *,
+        characters_by_id: Mapping[str, Character],
+    ) -> None:
+        character = characters_by_id.get(mutation.to_node_id)
+        state_item = None if character is None else state.characters.get(character.slug)
+        if state_item is not None and mutation.value_bool is not None:
+            state_item.is_alive = mutation.value_bool
+
+    @staticmethod
+    def _apply_character_location_mutation(
+        state: _ProjectionState,
+        mutation: Relationship,
+        *,
+        characters_by_id: Mapping[str, Character],
+        planets_by_id: Mapping[str, Planet],
+    ) -> None:
+        if mutation.subject_node_id is None:
+            return
+        character = characters_by_id.get(mutation.subject_node_id)
+        planet = planets_by_id.get(mutation.to_node_id)
+        state_item = None if character is None else state.characters.get(character.slug)
+        if state_item is not None and planet is not None:
+            state_item.location_planet_slug = planet.slug
+            state_item.location_planet_name = planet.name
+
+    @staticmethod
+    def _apply_planet_control_mutation(
+        state: _ProjectionState,
+        mutation: Relationship,
+        *,
+        planets_by_id: Mapping[str, Planet],
+        factions_by_id: Mapping[str, Faction],
+    ) -> None:
+        if mutation.subject_node_id is None:
+            return
+        planet = planets_by_id.get(mutation.subject_node_id)
+        faction = factions_by_id.get(mutation.to_node_id)
+        if planet is None or faction is None:
+            return
+        state.faction_control[planet.slug] = FactionControlState(
+            planet_slug=planet.slug,
+            planet_name=planet.name,
+            faction_slug=faction.slug,
+            faction_name=faction.name,
+        )
+
+    @staticmethod
+    def _apply_artifact_location_mutation(
+        state: _ProjectionState,
+        mutation: Relationship,
+        *,
+        characters_by_id: Mapping[str, Character],
+        planets_by_id: Mapping[str, Planet],
+    ) -> None:
+        if mutation.artifact_key is None:
+            return
+        artifact = UniverseStateService._get_or_create_artifact_state(state, mutation.artifact_key)
+        holder = characters_by_id.get(mutation.to_node_id)
+        planet = planets_by_id.get(mutation.to_node_id)
+        artifact.holder_character_slug = holder.slug if holder is not None else None
+        artifact.holder_character_name = holder.name if holder is not None else None
+        artifact.location_planet_slug = planet.slug if planet is not None else None
+        artifact.location_planet_name = planet.name if planet is not None else None
+        artifact.note = mutation.note or mutation.value_text
+
+    @staticmethod
+    def _get_or_create_artifact_state(
+        state: _ProjectionState, artifact_key: str
+    ) -> ArtifactLocationState:
+        artifact = state.artifacts.get(artifact_key)
+        if artifact is None:
+            artifact = ArtifactLocationState(
+                artifact_key=artifact_key,
+                artifact_name=ARTIFACT_NAMES.get(artifact_key, artifact_key),
+            )
+            state.artifacts[artifact_key] = artifact
+        return artifact

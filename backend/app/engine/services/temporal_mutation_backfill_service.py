@@ -1,11 +1,20 @@
+from collections.abc import Mapping
 from dataclasses import dataclass
 
+from app.domain.entities.character import Character
 from app.domain.entities.event import Event
+from app.domain.entities.faction import Faction
+from app.domain.entities.planet import Planet
 from app.domain.enums import RelationshipType
 from app.domain.errors import DuplicateEntityError
 from app.engine.dto import CreateRelationshipCommand
 from app.engine.services.relationship_service import RelationshipService
-from app.engine.universe_state_catalog import CHARACTER_SLUG_ALIASES, MUTATION_ALIASES
+from app.engine.universe_state_catalog import (
+    CHARACTER_SLUG_ALIASES,
+    MUTATION_ALIASES,
+    ArtifactMutation,
+    EventStateMutation,
+)
 from app.repositories.interfaces.character_repository import CharacterRepository
 from app.repositories.interfaces.event_repository import EventRepository
 from app.repositories.interfaces.faction_repository import FactionRepository
@@ -108,113 +117,188 @@ class TemporalMutationBackfillService:
             if event.id in seen_event_ids:
                 continue
             seen_event_ids.add(event.id)
-
-            for character_slug, update in mutation.character_updates.items():
-                character = self._resolve_character(characters_by_slug, character_slug)
-                if character is None:
-                    skipped_missing_entities.append(
-                        f"{event.slug}: character slug not found: {character_slug}"
-                    )
-                    continue
-                if update.is_alive is not None:
-                    plans.append(
-                        (
-                            event,
-                            PlannedTemporalMutation(
-                                event_slug=event.slug,
-                                relationship_type=RelationshipType.SETS_ALIVE_STATE,
-                                to_node_id=character.id,
-                                value_bool=update.is_alive,
-                                note=f"Backfilled from curated catalog for {event.slug}.",
-                            ),
-                        )
-                    )
-                if update.location_planet_slug is not None:
-                    planet = planets_by_slug.get(update.location_planet_slug)
-                    if planet is None:
-                        skipped_missing_entities.append(
-                            f"{event.slug}: planet slug not found: {update.location_planet_slug}"
-                        )
-                        continue
-                    plans.append(
-                        (
-                            event,
-                            PlannedTemporalMutation(
-                                event_slug=event.slug,
-                                relationship_type=RelationshipType.SETS_CHARACTER_LOCATION,
-                                to_node_id=planet.id,
-                                subject_node_id=character.id,
-                                note=f"Backfilled from curated catalog for {event.slug}.",
-                            ),
-                        )
-                    )
-
-            for planet_slug, faction_slug in mutation.control_updates.items():
-                planet = planets_by_slug.get(planet_slug)
-                faction = factions_by_slug.get(faction_slug)
-                if planet is None:
-                    skipped_missing_entities.append(
-                        f"{event.slug}: planet slug not found: {planet_slug}"
-                    )
-                    continue
-                if faction is None:
-                    skipped_missing_entities.append(
-                        f"{event.slug}: faction slug not found: {faction_slug}"
-                    )
-                    continue
-                plans.append(
-                    (
-                        event,
-                        PlannedTemporalMutation(
-                            event_slug=event.slug,
-                            relationship_type=RelationshipType.SETS_PLANET_CONTROL,
-                            to_node_id=faction.id,
-                            subject_node_id=planet.id,
-                            note=f"Backfilled from curated catalog for {event.slug}.",
-                        ),
-                    )
-                )
-
-            for artifact_key, update in mutation.artifact_updates.items():
-                to_node_id: str
-                if update.holder_character_slug is not None:
-                    holder = self._resolve_character(
-                        characters_by_slug, update.holder_character_slug
-                    )
-                    if holder is None:
-                        skipped_missing_entities.append(
-                            f"{event.slug}: character slug not found: {update.holder_character_slug}"
-                        )
-                        continue
-                    to_node_id = holder.id
-                elif update.location_planet_slug is not None:
-                    planet = planets_by_slug.get(update.location_planet_slug)
-                    if planet is None:
-                        skipped_missing_entities.append(
-                            f"{event.slug}: planet slug not found: {update.location_planet_slug}"
-                        )
-                        continue
-                    to_node_id = planet.id
-                else:
-                    skipped_missing_entities.append(
-                        f"{event.slug}: artifact mutation {artifact_key} has no holder or location"
-                    )
-                    continue
-                plans.append(
-                    (
-                        event,
-                        PlannedTemporalMutation(
-                            event_slug=event.slug,
-                            relationship_type=RelationshipType.SETS_ARTIFACT_LOCATION,
-                            to_node_id=to_node_id,
-                            artifact_key=artifact_key,
-                            note=update.note
-                            or f"Backfilled from curated catalog for {event.slug}.",
-                        ),
-                    )
-                )
+            self._append_character_update_plans(
+                plans,
+                skipped_missing_entities,
+                event=event,
+                characters_by_slug=characters_by_slug,
+                planets_by_slug=planets_by_slug,
+                mutation=mutation,
+            )
+            self._append_control_update_plans(
+                plans,
+                skipped_missing_entities,
+                event=event,
+                planets_by_slug=planets_by_slug,
+                factions_by_slug=factions_by_slug,
+                mutation=mutation,
+            )
+            self._append_artifact_update_plans(
+                plans,
+                skipped_missing_entities,
+                event=event,
+                characters_by_slug=characters_by_slug,
+                planets_by_slug=planets_by_slug,
+                mutation=mutation,
+            )
 
         return plans, missing_events, skipped_missing_entities
+
+    def _append_character_update_plans(
+        self,
+        plans: list[tuple[Event, PlannedTemporalMutation]],
+        skipped_missing_entities: list[str],
+        *,
+        event: Event,
+        characters_by_slug: Mapping[str, Character],
+        planets_by_slug: Mapping[str, Planet],
+        mutation: EventStateMutation,
+    ) -> None:
+        for character_slug, update in mutation.character_updates.items():
+            character = self._resolve_character(characters_by_slug, character_slug)
+            if character is None:
+                skipped_missing_entities.append(
+                    f"{event.slug}: character slug not found: {character_slug}"
+                )
+                continue
+            if update.is_alive is not None:
+                plans.append(
+                    (
+                        event,
+                        PlannedTemporalMutation(
+                            event_slug=event.slug,
+                            relationship_type=RelationshipType.SETS_ALIVE_STATE,
+                            to_node_id=character.id,
+                            value_bool=update.is_alive,
+                            note=self._backfill_note(event.slug),
+                        ),
+                    )
+                )
+            if update.location_planet_slug is None:
+                continue
+            planet = planets_by_slug.get(update.location_planet_slug)
+            if planet is None:
+                skipped_missing_entities.append(
+                    f"{event.slug}: planet slug not found: {update.location_planet_slug}"
+                )
+                continue
+            plans.append(
+                (
+                    event,
+                    PlannedTemporalMutation(
+                        event_slug=event.slug,
+                        relationship_type=RelationshipType.SETS_CHARACTER_LOCATION,
+                        to_node_id=planet.id,
+                        subject_node_id=character.id,
+                        note=self._backfill_note(event.slug),
+                    ),
+                )
+            )
+
+    def _append_control_update_plans(
+        self,
+        plans: list[tuple[Event, PlannedTemporalMutation]],
+        skipped_missing_entities: list[str],
+        *,
+        event: Event,
+        planets_by_slug: Mapping[str, Planet],
+        factions_by_slug: Mapping[str, Faction],
+        mutation: EventStateMutation,
+    ) -> None:
+        for planet_slug, faction_slug in mutation.control_updates.items():
+            planet = planets_by_slug.get(planet_slug)
+            faction = factions_by_slug.get(faction_slug)
+            if planet is None:
+                skipped_missing_entities.append(
+                    f"{event.slug}: planet slug not found: {planet_slug}"
+                )
+                continue
+            if faction is None:
+                skipped_missing_entities.append(
+                    f"{event.slug}: faction slug not found: {faction_slug}"
+                )
+                continue
+            plans.append(
+                (
+                    event,
+                    PlannedTemporalMutation(
+                        event_slug=event.slug,
+                        relationship_type=RelationshipType.SETS_PLANET_CONTROL,
+                        to_node_id=faction.id,
+                        subject_node_id=planet.id,
+                        note=self._backfill_note(event.slug),
+                    ),
+                )
+            )
+
+    def _append_artifact_update_plans(
+        self,
+        plans: list[tuple[Event, PlannedTemporalMutation]],
+        skipped_missing_entities: list[str],
+        *,
+        event: Event,
+        characters_by_slug: Mapping[str, Character],
+        planets_by_slug: Mapping[str, Planet],
+        mutation: EventStateMutation,
+    ) -> None:
+        for artifact_key, update in mutation.artifact_updates.items():
+            to_node_id = self._resolve_artifact_target_id(
+                event_slug=event.slug,
+                artifact_key=artifact_key,
+                update=update,
+                characters_by_slug=characters_by_slug,
+                planets_by_slug=planets_by_slug,
+                skipped_missing_entities=skipped_missing_entities,
+            )
+            if to_node_id is None:
+                continue
+            plans.append(
+                (
+                    event,
+                    PlannedTemporalMutation(
+                        event_slug=event.slug,
+                        relationship_type=RelationshipType.SETS_ARTIFACT_LOCATION,
+                        to_node_id=to_node_id,
+                        artifact_key=artifact_key,
+                        note=update.note or self._backfill_note(event.slug),
+                    ),
+                )
+            )
+
+    def _resolve_artifact_target_id(
+        self,
+        *,
+        event_slug: str,
+        artifact_key: str,
+        update: ArtifactMutation,
+        characters_by_slug: Mapping[str, Character],
+        planets_by_slug: Mapping[str, Planet],
+        skipped_missing_entities: list[str],
+    ) -> str | None:
+        if update.holder_character_slug is not None:
+            holder = self._resolve_character(characters_by_slug, update.holder_character_slug)
+            if holder is None:
+                skipped_missing_entities.append(
+                    f"{event_slug}: character slug not found: {update.holder_character_slug}"
+                )
+                return None
+            return holder.id
+        if update.location_planet_slug is not None:
+            planet = planets_by_slug.get(update.location_planet_slug)
+            if planet is None:
+                skipped_missing_entities.append(
+                    f"{event_slug}: planet slug not found: {update.location_planet_slug}"
+                )
+                return None
+            return planet.id
+        skipped_missing_entities.append(
+            f"{event_slug}: artifact mutation {artifact_key} has no holder or location"
+        )
+        return None
+
+    @staticmethod
+    def _backfill_note(event_slug: str) -> str:
+        return f"Backfilled from curated catalog for {event_slug}."
 
     @staticmethod
     def _describe(event_slug: str, plan: PlannedTemporalMutation) -> str:
@@ -229,8 +313,8 @@ class TemporalMutationBackfillService:
 
     @staticmethod
     def _resolve_character(
-        characters_by_slug: dict[str, object], character_slug: str
-    ) -> object | None:
+        characters_by_slug: Mapping[str, Character], character_slug: str
+    ) -> Character | None:
         for candidate_slug in CHARACTER_SLUG_ALIASES.get(character_slug, (character_slug,)):
             character = characters_by_slug.get(candidate_slug)
             if character is not None:
