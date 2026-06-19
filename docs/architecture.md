@@ -212,6 +212,53 @@ The event detail graph keeps one React Flow instance alive across canonical and 
 
 This reduces the risk of stale event handlers, orphaned DOM nodes, and unnecessary React Flow churn when toggling the what-if simulation on large graphs.
 
+## Current Scaling Characteristics
+
+The current system does not maintain a global in-memory graph cache inside FastAPI. There is no process-wide `NetworkX` graph being hydrated at boot and shared across requests.
+
+Instead:
+
+- Neo4j is the source of truth for graph state
+- FastAPI instances are effectively stateless with respect to event and relationship data
+- graph traversals are executed through repository-level Cypher queries
+- Python-side simulation logic runs on the request-scoped subgraph returned from Neo4j
+
+### Horizontal Scaling
+
+Because instances read graph state directly from Neo4j, horizontal scaling does not create an in-memory graph synchronization problem in the current architecture. If one instance handles `POST /api/v1/events` or `POST /api/v1/graph/relationships`, the persisted update is visible to other instances through subsequent Neo4j reads.
+
+That means the current system does not need cache invalidation or pub/sub just to keep multiple FastAPI containers consistent.
+
+### Real Bottlenecks
+
+As the dataset grows from a small archive to a much larger graph, the main scaling pressures are more likely to be:
+
+- Neo4j query cost for deep traversal and graph assembly
+- larger API payloads for causal graphs and simulation responses
+- Python post-processing time on returned subgraphs
+- frontend rendering cost for dense React Flow node and edge sets
+
+The most sensitive paths are likely to be:
+
+- event dependency and consequence traversal
+- event-focused causal graph assembly
+- break-simulation requests over large downstream graphs
+- universe-state projection when the mutation catalog grows substantially
+
+### MVP Limitation
+
+The current design favors correctness and simplicity over aggressive precomputation or caching. This is appropriate for the current scale, but large graph growth will eventually require tighter controls on traversal breadth, payload size, and simulation scope.
+
+### Upgrade Paths
+
+If graph size or traffic increases significantly, likely next steps are:
+
+- tighter depth and result-size limits on traversal-heavy endpoints
+- more specialized Cypher query tuning and indexing
+- precomputed projections or summaries for hot graph views
+- Neo4j Graph Data Science for heavier analytical workloads if the use cases move beyond straightforward traversal
+- Redis or pub/sub only if the architecture later introduces shared in-memory graph caches or derived graph materializations inside application instances
+
 ## Mutation System
 
 The mutation system lets events author changes to world state without embedding those state snapshots directly on nodes.
