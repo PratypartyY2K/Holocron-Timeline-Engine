@@ -238,6 +238,18 @@ Request payload fields:
 - `value_bool` optional boolean payload, used by alive-state mutations
 - `value_text` optional text payload
 
+Validation behavior before commit:
+
+- verifies that source and target nodes exist
+- rejects self-referential relationships
+- rejects unsupported source/target node type combinations
+- rejects duplicate relationships
+- rejects `CAUSES` edges that would introduce a cycle
+- rejects `CAUSES` edges that violate chronology ordering
+- normalizes canonical symmetric relationships such as `ALLIED_WITH` and `ENEMY_OF` to a stable endpoint order
+
+This means structural checks for new relationship writes happen in the application layer before Neo4j persistence, while `scripts/audit/relationship_integrity.cypher` remains useful as a post-hoc audit for existing graph data.
+
 ## Notes
 
 - All routes are mounted under `/api/v1`.
