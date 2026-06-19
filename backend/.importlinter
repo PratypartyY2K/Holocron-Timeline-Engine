@@ -1,0 +1,10 @@
+[importlinter]
+root_package = app
+
+[contract:layers]
+name = Enforce backend layers
+type = layers
+layers =
+    api
+    engine
+    repositories
