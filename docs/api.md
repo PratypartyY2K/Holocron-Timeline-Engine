@@ -1,0 +1,192 @@
+# API
+
+Base URL: `http://localhost:8000/api/v1`
+
+Interactive docs:
+
+- Swagger UI: `http://localhost:8000/docs`
+
+## Health
+
+### `GET /health`
+
+Returns a simple status payload.
+
+## Search
+
+### `GET /search`
+
+Searches across events, characters, planets, and factions.
+
+Query parameters:
+
+- `q` required search string, minimum length 1
+- `limit` optional, default `10`, range `1..25`
+
+## Events
+
+### `POST /events`
+
+Creates an event.
+
+### `GET /events`
+
+Lists events with timeline and semantic filters.
+
+Query parameters:
+
+- `start_year` optional integer
+- `end_year` optional integer
+- `era` optional string
+- `character` optional character slug
+- `location` optional planet slug
+- `causal_depth` optional integer, range `1..8`
+- `limit` optional, default `50`, range `1..200`
+- `offset` optional, default `0`
+- `order` optional `asc|desc`, default `asc`
+
+### `GET /events/{event_id}`
+
+Fetches a single event by id.
+
+### `GET /events/by-slug/{slug}`
+
+Fetches a single event by slug.
+
+### `GET /events/{event_id}/dependencies`
+
+Returns upstream causal dependencies for an event.
+
+Query parameters:
+
+- `depth` optional integer, minimum `1`
+
+### `GET /events/{event_id}/consequences`
+
+Returns downstream causal consequences for an event.
+
+Query parameters:
+
+- `depth` optional integer, minimum `1`
+
+### `GET /events/{event_id}/causal-graph`
+
+Returns an event-focused causal graph.
+
+Query parameters:
+
+- `depth` optional integer, default `2`, range `1..8`
+
+### `GET /events/{event_id}/impact`
+
+Returns impacted downstream events and broken edges for an event.
+
+### `GET /events/{event_id}/universe-state`
+
+Returns the projected universe state immediately before the selected event.
+
+## Timeline
+
+### `GET /timeline/events`
+
+Lists events as a timeline-oriented endpoint.
+
+Query parameters:
+
+- `start_year` optional integer
+- `end_year` optional integer
+- `limit` optional, default `50`, range `1..200`
+- `offset` optional, default `0`
+- `order` optional `asc|desc`, default `asc`
+
+## Engine
+
+### `GET /engine/simulate-break/{event_id}`
+
+Runs the break-simulation engine for an event and returns the alternate branch graph with per-node statuses such as `broken`, `invalidated`, and `unresolved`.
+
+## Characters
+
+### `POST /characters`
+
+Creates a character.
+
+### `GET /characters`
+
+Lists characters.
+
+### `GET /characters/by-slug/{slug}`
+
+Fetches a character by slug.
+
+### `GET /characters/{character_id}/timeline`
+
+Returns the filtered event timeline for a character.
+
+Query parameters:
+
+- `start_year` optional integer
+- `end_year` optional integer
+- `era` optional string
+- `location` optional planet slug
+- `causal_depth` optional integer, range `1..8`
+- `limit` optional, default `50`, range `1..200`
+- `offset` optional, default `0`
+- `order` optional `asc|desc`, default `asc`
+
+## Planets
+
+### `POST /planets`
+
+Creates a planet.
+
+### `GET /planets`
+
+Lists planets.
+
+### `GET /planets/by-slug/{slug}`
+
+Fetches a planet by slug.
+
+## Factions
+
+### `POST /factions`
+
+Creates a faction.
+
+### `GET /factions`
+
+Lists factions.
+
+### `GET /factions/by-slug/{slug}`
+
+Fetches a faction by slug.
+
+## Graph
+
+### `POST /graph/relationships`
+
+Creates a graph relationship or temporal mutation.
+
+Used for:
+
+- causal edges such as `CAUSES`
+- archive semantics such as `INVOLVES`, `LOCATED_IN`, `MEMBER_OF`, `ALLIED_WITH`, and `ENEMY_OF`
+- temporal mutations such as `SETS_ALIVE_STATE`, `SETS_CHARACTER_LOCATION`, `SETS_PLANET_CONTROL`, and `SETS_ARTIFACT_LOCATION`
+
+Request payload fields:
+
+- `type` relationship type
+- `from_node_id` source node id
+- `to_node_id` target node id
+- `note` optional note
+- `subject_node_id` optional subject entity for stateful mutations
+- `artifact_key` optional artifact identifier for artifact-location mutations
+- `value_bool` optional boolean payload, used by alive-state mutations
+- `value_text` optional text payload
+
+## Notes
+
+- All routes are mounted under `/api/v1`.
+- The source of truth for request and response shapes is the FastAPI schema exposed at `/docs`.
+- Validation errors, missing entities, duplicate edges, unsupported relationships, and chronology violations are surfaced by the backend as HTTP errors through the API error handlers.
