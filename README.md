@@ -18,6 +18,14 @@ Holocron Timeline Engine is a Star Wars timeline explorer and knowledge graph bu
 - Relationship authoring API for graph edges and temporal mutations
 - Curated mutation backfill pipeline for restoring timeline state into Neo4j
 
+## Engineering Highlights
+
+- Graph-based data model using Neo4j
+- Causal dependency traversal implemented with Cypher queries
+- Topological propagation for timeline break simulation
+- Separation of engine logic from the API layer
+- Typed API layer built with FastAPI and Pydantic
+
 ## Demo Routes
 
 - `/` search-driven homepage and archive entry point
@@ -36,6 +44,16 @@ Examples:
 - `http://localhost:3000/events`
 - `http://localhost:3000/events/battle-of-yavin?depth=2`
 - `http://localhost:3000/characters/luke-skywalker`
+
+## Example Use Case
+
+1. Open `/events`.
+2. Select `Battle of Yavin`.
+3. View its causal graph.
+4. Toggle `What If?`.
+5. Observe downstream events become invalidated or unresolved.
+
+This demonstrates how causal relationships propagate through the system when a key event is broken.
 
 ## Architecture
 
