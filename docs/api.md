@@ -6,6 +6,59 @@ Interactive docs:
 
 - Swagger UI: `http://localhost:8000/docs`
 
+## Endpoint Groups
+
+### Health
+
+- `GET /health`
+
+### Search
+
+- `GET /search`
+
+### Events
+
+- `POST /events`
+- `GET /events`
+- `GET /events/{event_id}`
+- `GET /events/by-slug/{slug}`
+- `GET /events/{event_id}/universe-state`
+
+### Graph
+
+- `POST /graph/relationships`
+- `GET /events/{event_id}/dependencies`
+- `GET /events/{event_id}/consequences`
+- `GET /events/{event_id}/causal-graph`
+- `GET /events/{event_id}/impact`
+
+### Simulation
+
+- `GET /engine/simulate-break/{event_id}`
+
+### Timeline
+
+- `GET /timeline/events`
+- `GET /characters/{character_id}/timeline`
+
+### Characters
+
+- `POST /characters`
+- `GET /characters`
+- `GET /characters/by-slug/{slug}`
+
+### Planets
+
+- `POST /planets`
+- `GET /planets`
+- `GET /planets/by-slug/{slug}`
+
+### Factions
+
+- `POST /factions`
+- `GET /factions`
+- `GET /factions/by-slug/{slug}`
+
 ## Health
 
 ### `GET /health`
