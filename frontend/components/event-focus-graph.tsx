@@ -3,7 +3,7 @@
 import type { Route } from "next";
 import dagre from "@dagrejs/dagre";
 import { useRouter } from "next/navigation";
-import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import ReactFlow, {
   Background,
   Controls,
@@ -14,6 +14,7 @@ import ReactFlow, {
   type EdgeTypes,
   type Node,
   type NodeMouseHandler,
+  type ReactFlowInstance,
 } from "reactflow";
 import "reactflow/dist/style.css";
 
@@ -34,7 +35,6 @@ type EventFocusGraphProps = {
 };
 
 type GraphColorMode = "tone" | "era" | "faction";
-type GraphMode = "canonical" | "simulation";
 
 type GraphNodeData = {
   label: ReactNode;
@@ -55,7 +55,6 @@ type GraphSource = {
 type GraphBuildResult = {
   edges: Edge[];
   nodes: Node<GraphNodeData>[];
-  renderedNodeIds: string[];
 };
 
 type PathSelection = {
@@ -164,14 +163,6 @@ function buildSimulationLabel(
   );
 }
 
-function toRenderedNodeId(nodeId: string, mode: GraphMode): string {
-  return mode === "simulation" ? `what-if:${nodeId}` : nodeId;
-}
-
-function toRenderedEdgeId(edgeId: string, mode: GraphMode): string {
-  return mode === "simulation" ? `what-if:${edgeId}` : edgeId;
-}
-
 function toVisualStatus(
   status: TimelineBreakSimulationNodeRecord["status"] | "normal" | "deactivated",
 ): GraphNodeData["status"] {
@@ -266,12 +257,11 @@ function toneForNode(
 
 function computePathSelection(
   edges: CausalGraphEdgeRecord[],
-  mode: GraphMode,
   startNodeId: string | null,
   endNodeId: string | null,
 ): PathSelection {
   if (!startNodeId || !endNodeId || startNodeId === endNodeId) {
-    return { edges: new Set(), nodes: new Set(startNodeId ? [toRenderedNodeId(startNodeId, mode)] : []) };
+    return { edges: new Set(), nodes: new Set(startNodeId ? [startNodeId] : []) };
   }
 
   const outgoing = new Map<string, Array<{ edgeId: string; targetId: string }>>();
@@ -281,17 +271,19 @@ function computePathSelection(
     outgoing.set(edge.source_id, bucket);
   }
 
-  const path = findDirectedPath(outgoing, startNodeId, endNodeId) ?? findDirectedPath(outgoing, endNodeId, startNodeId);
+  const path =
+    findDirectedPath(outgoing, startNodeId, endNodeId) ??
+    findDirectedPath(outgoing, endNodeId, startNodeId);
   if (!path) {
     return {
       edges: new Set(),
-      nodes: new Set([toRenderedNodeId(startNodeId, mode), toRenderedNodeId(endNodeId, mode)]),
+      nodes: new Set([startNodeId, endNodeId]),
     };
   }
 
   return {
-    edges: new Set(path.edgeIds.map((edgeId) => toRenderedEdgeId(edgeId, mode))),
-    nodes: new Set(path.nodeIds.map((nodeId) => toRenderedNodeId(nodeId, mode))),
+    edges: new Set(path.edgeIds),
+    nodes: new Set(path.nodeIds),
   };
 }
 
@@ -363,13 +355,11 @@ function buildGraph(
   source: GraphSource,
   {
     colorMode,
-    mode,
     pathSelection,
     pathAnchorId,
     simulateEnabled,
   }: {
     colorMode: GraphColorMode;
-    mode: GraphMode;
     pathSelection: PathSelection;
     pathAnchorId: string | null;
     simulateEnabled: boolean;
@@ -426,9 +416,8 @@ function buildGraph(
     const tone = toneForNode(event.id, focusEventId, incoming, outgoing);
     const layoutNode = dagreGraph.node(event.id);
     const chronologyColumn = chronologyColumnByYear.get(event.start_year) ?? 0;
-    const renderedNodeId = toRenderedNodeId(event.id, mode);
     const accent = nodeAccent(event, colorMode);
-    const isOnPath = pathSelection.nodes.has(renderedNodeId);
+    const isOnPath = pathSelection.nodes.has(event.id);
     const isAnchor = pathAnchorId === event.id;
     const status =
       "status" in event
@@ -436,7 +425,7 @@ function buildGraph(
         : (simulateEnabled ? "deactivated" : "normal");
 
     return {
-      id: renderedNodeId,
+      id: event.id,
       type: "default",
       position: {
         x: LAYOUT_MARGIN_X + chronologyColumn * CHRONOLOGY_COLUMN_GAP,
@@ -466,16 +455,15 @@ function buildGraph(
   });
 
   const edges: Edge[] = source.edges.map((edge) => {
-    const renderedEdgeId = toRenderedEdgeId(edge.id, mode);
     const targetNode = eventById.get(edge.target_id);
-    const edgeOnPath = pathSelection.edges.has(renderedEdgeId);
+    const edgeOnPath = pathSelection.edges.has(edge.id);
     const accent = targetNode ? nodeAccent(targetNode, colorMode) : "#e9b44c";
     const targetStatus = targetNode && "status" in targetNode ? targetNode.status : null;
 
     return {
-      id: renderedEdgeId,
-      source: toRenderedNodeId(edge.source_id, mode),
-      target: toRenderedNodeId(edge.target_id, mode),
+      id: edge.id,
+      source: edge.source_id,
+      target: edge.target_id,
       type: "causal",
       markerEnd: { type: MarkerType.ArrowClosed },
       animated: edgeOnPath,
@@ -511,11 +499,7 @@ function buildGraph(
     };
   });
 
-  return {
-    nodes,
-    edges,
-    renderedNodeIds: nodes.map((node) => node.id),
-  };
+  return { nodes, edges };
 }
 
 function selectionLabel(source: GraphSource, startNodeId: string | null, endNodeId: string | null): string {
@@ -535,28 +519,29 @@ function currentSource(
   graph: CausalGraphResponse,
   simulation: TimelineBreakSimulationResponse | null | undefined,
   simulateEnabled: boolean,
-): { mode: GraphMode; source: GraphSource } {
+): GraphSource {
   if (simulateEnabled && simulation) {
     return {
-      mode: "simulation",
-      source: {
-        brokenEventId: simulation.broken_event_id,
-        depth: graph.depth,
-        edges: simulation.edges,
-        nodes: simulation.nodes,
-      },
+      brokenEventId: simulation.broken_event_id,
+      depth: graph.depth,
+      edges: simulation.edges,
+      nodes: simulation.nodes,
     };
   }
 
   return {
-    mode: "canonical",
-    source: {
-      brokenEventId: graph.focus_event_id,
-      depth: graph.depth,
-      edges: graph.edges,
-      nodes: graph.nodes,
-    },
+    brokenEventId: graph.focus_event_id,
+    depth: graph.depth,
+    edges: graph.edges,
+    nodes: graph.nodes,
   };
+}
+
+function hasGraphNode(source: GraphSource, nodeId: string | null): boolean {
+  if (nodeId === null) {
+    return false;
+  }
+  return source.nodes.some((node) => node.id === nodeId);
 }
 
 export function EventFocusGraph({
@@ -570,34 +555,28 @@ export function EventFocusGraph({
   const [colorMode, setColorMode] = useState<GraphColorMode>("tone");
   const [pathStartNodeId, setPathStartNodeId] = useState<string | null>(null);
   const [pathEndNodeId, setPathEndNodeId] = useState<string | null>(null);
+  const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
   const clickTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const activeGraph = useMemo(
+  const activeSource = useMemo(
     () => currentSource(graph, simulation, simulateEnabled),
     [graph, simulateEnabled, simulation],
   );
 
   const pathSelection = useMemo(
-    () => computePathSelection(activeGraph.source.edges, activeGraph.mode, pathStartNodeId, pathEndNodeId),
-    [activeGraph.mode, activeGraph.source.edges, pathEndNodeId, pathStartNodeId],
+    () => computePathSelection(activeSource.edges, pathStartNodeId, pathEndNodeId),
+    [activeSource.edges, pathEndNodeId, pathStartNodeId],
   );
 
   const reactFlowGraph = useMemo(
     () =>
-      buildGraph(activeGraph.source, {
+      buildGraph(activeSource, {
         colorMode,
-        mode: activeGraph.mode,
         pathSelection,
         pathAnchorId: pathStartNodeId,
         simulateEnabled,
       }),
-    [activeGraph.mode, activeGraph.source, colorMode, pathSelection, pathStartNodeId, simulateEnabled],
-  );
-
-  const reactFlowKey = useMemo(
-    () =>
-      `${activeGraph.mode}:${activeGraph.source.brokenEventId ?? "graph"}:${reactFlowGraph.renderedNodeIds.length}:${activeGraph.source.edges.length}:${colorMode}`,
-    [activeGraph.mode, activeGraph.source.brokenEventId, activeGraph.source.edges.length, colorMode, reactFlowGraph.renderedNodeIds.length],
+    [activeSource, colorMode, pathSelection, pathStartNodeId, simulateEnabled],
   );
 
   const handleHoverNoteChange = useCallback((note: string | null) => {
@@ -616,7 +595,6 @@ export function EventFocusGraph({
 
   const handleNodeClick = useCallback<NodeMouseHandler>(
     (_, node) => {
-      const rawId = node.id.startsWith("what-if:") ? node.id.replace("what-if:", "") : node.id;
       if (clickTimeoutRef.current !== null) {
         clearTimeout(clickTimeoutRef.current);
       }
@@ -624,13 +602,13 @@ export function EventFocusGraph({
         setPathStartNodeId((currentStart) => {
           if (currentStart === null) {
             setPathEndNodeId(null);
-            return rawId;
+            return node.id;
           }
-          if (currentStart === rawId) {
+          if (currentStart === node.id) {
             setPathEndNodeId(null);
             return null;
           }
-          setPathEndNodeId(rawId);
+          setPathEndNodeId(node.id);
           return currentStart;
         });
         clickTimeoutRef.current = null;
@@ -666,9 +644,38 @@ export function EventFocusGraph({
   );
 
   const pathSummary = useMemo(
-    () => selectionLabel(activeGraph.source, pathStartNodeId, pathEndNodeId),
-    [activeGraph.source, pathEndNodeId, pathStartNodeId],
+    () => selectionLabel(activeSource, pathStartNodeId, pathEndNodeId),
+    [activeSource, pathEndNodeId, pathStartNodeId],
   );
+
+  useEffect(() => {
+    return () => {
+      if (clickTimeoutRef.current !== null) {
+        clearTimeout(clickTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!hasGraphNode(activeSource, pathStartNodeId)) {
+      setPathStartNodeId(null);
+      setPathEndNodeId(null);
+      return;
+    }
+    if (!hasGraphNode(activeSource, pathEndNodeId)) {
+      setPathEndNodeId(null);
+    }
+  }, [activeSource, pathEndNodeId, pathStartNodeId]);
+
+  useEffect(() => {
+    if (!reactFlowInstance) {
+      return;
+    }
+    const timeoutId = setTimeout(() => {
+      void reactFlowInstance.fitView({ padding: 0.2 });
+    }, 0);
+    return () => clearTimeout(timeoutId);
+  }, [reactFlowGraph.edges, reactFlowGraph.nodes, reactFlowInstance]);
 
   return (
     <div className="graph-shell">
@@ -678,13 +685,13 @@ export function EventFocusGraph({
           <h2>Focused causal map</h2>
         </div>
         <p className="timeline-caption">
-          Visualizing actual <code>CAUSES</code> edges within depth {activeGraph.source.depth}. Use
+          Visualizing actual <code>CAUSES</code> edges within depth {activeSource.depth}. Use
           click-to-anchor path tracing and switch node coloring by graph tone, era, or faction.
           {simulateEnabled
             ? simulationLoading
               ? " Alternate timeline is loading."
               : simulation
-                ? " Simulated nodes are rendered as a separate alternate branch."
+                ? " Simulated nodes are rendered in the same graph with status-based styling."
                 : " Preparing alternate timeline."
             : ""}
         </p>
@@ -715,7 +722,6 @@ export function EventFocusGraph({
 
       <div className="graph-canvas">
         <ReactFlow
-          key={reactFlowKey}
           nodes={reactFlowGraph.nodes}
           edges={edgesWithHoverData}
           fitView
@@ -728,6 +734,7 @@ export function EventFocusGraph({
           defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}
           nodeOrigin={[0, 0]}
           zoomOnDoubleClick={false}
+          onInit={setReactFlowInstance}
           onNodeClick={handleNodeClick}
           onNodeDoubleClick={handleNodeDoubleClick}
         >
