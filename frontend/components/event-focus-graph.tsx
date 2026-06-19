@@ -502,6 +502,8 @@ function buildGraph(
     return {
       id: event.id,
       type: "default",
+      width: NODE_WIDTH,
+      height: NODE_HEIGHT,
       position: {
         x: LAYOUT_MARGIN_X + chronologyColumn * CHRONOLOGY_COLUMN_GAP,
         y: layoutNode.y - NODE_HEIGHT / 2,
