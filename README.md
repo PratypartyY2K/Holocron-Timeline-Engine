@@ -2,6 +2,15 @@
 
 Holocron Timeline Engine is a Star Wars timeline explorer and knowledge graph built with a Next.js frontend, a FastAPI backend, and Neo4j for graph storage. It focuses on event chronology, causal relationships, and "what if" timeline break simulations.
 
+```mermaid
+graph TD
+    NextJS["Next.js Frontend"] -->|REST API| FastAPI["FastAPI API Layer"]
+    FastAPI -->|Business Logic| Engine["Engine Services"]
+    Engine -->|Cypher Queries| Neo4j["Neo4j Graph DB"]
+    RawData["data/raw + scripts/transform.py"] -->|Compiled Dataset| Ingestion["Ingestion Pipeline"]
+    Ingestion -->|Validated Writes| FastAPI
+```
+
 ## What It Is
 
 - Interactive archive for events, characters, planets, and factions
