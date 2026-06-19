@@ -3,6 +3,7 @@ from uuid import uuid4
 from app.domain.entities.character import Character
 from app.domain.errors import DuplicateEntityError, EntityNotFoundError, ValidationError
 from app.engine.dto import CreateCharacterCommand
+from app.engine.services.universe_state_service import UniverseStateService
 from app.repositories.interfaces.character_repository import CharacterRepository
 
 
@@ -26,7 +27,9 @@ class CharacterService:
             species=command.species,
             homeworld_name=command.homeworld_name,
         )
-        return self._character_repository.create(character)
+        created = self._character_repository.create(character)
+        UniverseStateService.invalidate_projection_cache()
+        return created
 
     def get_character(self, character_id: str) -> Character:
         character = self._character_repository.get_by_id(character_id)

@@ -4,6 +4,7 @@ from app.domain.entities.relationship import Relationship
 from app.domain.enums import NodeType, RelationshipType
 from app.domain.errors import ChronologyError, DuplicateEntityError, EntityNotFoundError, UnsupportedRelationshipError, ValidationError
 from app.engine.dto import CreateRelationshipCommand
+from app.engine.services.universe_state_service import UniverseStateService
 from app.repositories.interfaces.graph_repository import GraphRepository
 
 
@@ -91,7 +92,9 @@ class RelationshipService:
             value_bool=command.value_bool,
             value_text=command.value_text,
         )
-        return self._graph_repository.create_relationship(relationship)
+        created = self._graph_repository.create_relationship(relationship)
+        UniverseStateService.invalidate_projection_cache()
+        return created
 
     def _validate_causes_relationship(self, *, source_id: str, target_id: str) -> None:
         if self._graph_repository.causes_path_exists(from_node_id=target_id, to_node_id=source_id):

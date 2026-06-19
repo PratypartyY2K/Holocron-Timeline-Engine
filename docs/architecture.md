@@ -305,6 +305,23 @@ It starts from baseline values for tracked characters, faction control, and arti
 
 This gives the event detail page a snapshot of the galaxy as of the selected point in the timeline.
 
+### Universe State Checkpoints
+
+The universe-state projection path now uses process-local checkpoints to reduce full mutation replay on repeated requests:
+
+- a base tracked-state snapshot is built from the curated baseline catalog
+- mutation relationships are grouped by authored event
+- checkpoint snapshots are cached at era boundaries after replaying mutations through the last event in that era
+- requests for `GET /api/v1/events/{event_id}/universe-state` resume from the nearest prior checkpoint and replay only the remaining event delta
+
+This improves repeated reads on a warm application instance, especially when the mutation catalog grows.
+
+Current limitation:
+
+- the checkpoint cache is local to a running FastAPI process
+- local write paths invalidate that process cache after event, entity, or relationship creation
+- multi-instance deployments still rely on Neo4j as the source of truth, so cross-instance cache coordination would require an additional invalidation mechanism if stronger distributed cache coherence becomes necessary
+
 ### Backfill Workflow
 
 `TemporalMutationBackfillService` turns curated aliases from `universe_state_catalog.py` into actual graph relationships. It:

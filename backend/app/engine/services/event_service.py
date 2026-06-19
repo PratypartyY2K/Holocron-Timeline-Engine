@@ -5,6 +5,7 @@ from app.domain.entities.event import Event
 from app.domain.entities.event_impact import EventImpact
 from app.domain.errors import ChronologyError, DuplicateEntityError, EntityNotFoundError, ValidationError
 from app.engine.dto import CreateEventCommand, ListEventsQuery
+from app.engine.services.universe_state_service import UniverseStateService
 from app.repositories.interfaces.event_repository import EventRepository
 
 
@@ -29,7 +30,9 @@ class EventService:
             canon_status=command.canon_status,
             source_refs=list(command.source_refs),
         )
-        return self._event_repository.create(event)
+        created = self._event_repository.create(event)
+        UniverseStateService.invalidate_projection_cache()
+        return created
 
     def get_event(self, event_id: str) -> Event:
         event = self._event_repository.get_by_id(event_id)

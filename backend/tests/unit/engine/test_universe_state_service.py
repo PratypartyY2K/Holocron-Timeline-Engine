@@ -17,6 +17,7 @@ from tests.unit.engine.fakes import (
 
 
 def make_service() -> UniverseStateService:
+    UniverseStateService.invalidate_projection_cache()
     event_repository = FakeEventRepository()
     event_repository.create(
         Event(
@@ -166,6 +167,7 @@ def make_service() -> UniverseStateService:
 
 
 def test_state_before_battle_of_yavin_uses_prior_mutations_only() -> None:
+    UniverseStateService.invalidate_projection_cache()
     service = make_service()
 
     snapshot = service.get_state_before_event("event-battle-yavin")
@@ -179,6 +181,7 @@ def test_state_before_battle_of_yavin_uses_prior_mutations_only() -> None:
 
 
 def test_state_before_battle_of_exegol_includes_earlier_character_deaths() -> None:
+    UniverseStateService.invalidate_projection_cache()
     service = make_service()
 
     snapshot = service.get_state_before_event("event-battle-exegol")
@@ -190,6 +193,7 @@ def test_state_before_battle_of_exegol_includes_earlier_character_deaths() -> No
 
 
 def test_state_projection_prefers_graph_mutation_edges_when_present() -> None:
+    UniverseStateService.invalidate_projection_cache()
     event_repository = FakeEventRepository()
     event_repository.create(Event("event-rise-empire", "rise-of-the-empire", "Rise of the Empire", None, -19, -19, None, None))
     event_repository.create(Event("event-battle-yavin", "battle-of-yavin", "Battle of Yavin", None, 0, 0, None, None))
@@ -257,6 +261,7 @@ def test_state_projection_prefers_graph_mutation_edges_when_present() -> None:
 
 
 def test_state_without_graph_mutations_keeps_baseline_state() -> None:
+    UniverseStateService.invalidate_projection_cache()
     event_repository = FakeEventRepository()
     event_repository.create(Event("event-battle-yavin", "battle-of-yavin", "Battle of Yavin", None, 0, 0, None, None))
 
@@ -294,3 +299,54 @@ def test_state_without_graph_mutations_keeps_baseline_state() -> None:
     assert snapshot.projection_mode == "graph-event-projection"
     assert controls["coruscant"] == "galactic-republic"
     assert characters["grand-moff-tarkin"].is_alive is True
+
+
+def test_projection_cache_reuses_loaded_mutations_across_service_instances() -> None:
+    UniverseStateService.invalidate_projection_cache()
+    service = make_service()
+    graph_repository = service._graph_repository
+
+    first_snapshot = service.get_state_before_event("event-battle-exegol")
+    second_service = UniverseStateService(
+        event_repository=service._event_repository,
+        character_repository=service._character_repository,
+        planet_repository=service._planet_repository,
+        faction_repository=service._faction_repository,
+        graph_repository=graph_repository,
+    )
+    second_snapshot = second_service.get_state_before_event("event-battle-yavin")
+
+    assert first_snapshot.event_slug == "battle-of-exegol"
+    assert second_snapshot.event_slug == "battle-of-yavin"
+    assert graph_repository.list_state_mutations_before_event_calls == ["event-battle-exegol"]
+
+
+def test_projection_cache_is_invalidated_after_new_relationship_write() -> None:
+    UniverseStateService.invalidate_projection_cache()
+    service = make_service()
+    graph_repository = service._graph_repository
+
+    initial_snapshot = service.get_state_before_event("event-battle-exegol")
+    characters_before = {item.slug: item for item in initial_snapshot.characters}
+    assert characters_before["sheev-palpatine"].is_alive is True
+    assert graph_repository.list_state_mutations_before_event_calls == ["event-battle-exegol"]
+
+    relationship_service = RelationshipService(graph_repository)
+    relationship_service.create_relationship(
+        CreateRelationshipCommand(
+            type=RelationshipType.SETS_ALIVE_STATE,
+            from_node_id="event-battle-crait",
+            to_node_id="char-palpatine",
+            value_bool=False,
+            note="Checkpoint invalidation test",
+        )
+    )
+
+    refreshed_snapshot = service.get_state_before_event("event-battle-exegol")
+    characters_after = {item.slug: item for item in refreshed_snapshot.characters}
+
+    assert characters_after["sheev-palpatine"].is_alive is False
+    assert graph_repository.list_state_mutations_before_event_calls == [
+        "event-battle-exegol",
+        "event-battle-exegol",
+    ]

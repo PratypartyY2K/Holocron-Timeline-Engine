@@ -3,6 +3,7 @@ from uuid import uuid4
 from app.domain.entities.planet import Planet
 from app.domain.errors import DuplicateEntityError, EntityNotFoundError, ValidationError
 from app.engine.dto import CreatePlanetCommand
+from app.engine.services.universe_state_service import UniverseStateService
 from app.repositories.interfaces.planet_repository import PlanetRepository
 
 
@@ -25,7 +26,9 @@ class PlanetService:
             description=command.description,
             region=command.region,
         )
-        return self._planet_repository.create(planet)
+        created = self._planet_repository.create(planet)
+        UniverseStateService.invalidate_projection_cache()
+        return created
 
     def get_planet_by_slug(self, slug: str) -> Planet:
         planet = self._planet_repository.get_by_slug(slug)

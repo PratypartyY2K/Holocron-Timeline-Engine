@@ -143,6 +143,7 @@ class FakeGraphRepository(GraphRepository):
         self.relationships: list[Relationship] = []
         self.event_chronology_by_id: dict[str, tuple[int, int | None]] = {}
         self.search_results: list[SearchResult] = []
+        self.list_state_mutations_before_event_calls: list[str] = []
 
     def get_node_reference(self, node_id: str) -> NodeReference | None:
         return self.nodes_by_id.get(node_id)
@@ -204,6 +205,7 @@ class FakeGraphRepository(GraphRepository):
         return relationship
 
     def list_state_mutations_before_event(self, *, event_id: str) -> list[Relationship]:
+        self.list_state_mutations_before_event_calls.append(event_id)
         chronology = self.event_chronology_by_id.get(event_id)
         if chronology is None:
             return []

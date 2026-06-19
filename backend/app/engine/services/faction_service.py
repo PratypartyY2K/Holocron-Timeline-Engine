@@ -3,6 +3,7 @@ from uuid import uuid4
 from app.domain.entities.faction import Faction
 from app.domain.errors import DuplicateEntityError, EntityNotFoundError, ValidationError
 from app.engine.dto import CreateFactionCommand
+from app.engine.services.universe_state_service import UniverseStateService
 from app.repositories.interfaces.faction_repository import FactionRepository
 
 
@@ -24,7 +25,9 @@ class FactionService:
             name=command.name,
             description=command.description,
         )
-        return self._faction_repository.create(faction)
+        created = self._faction_repository.create(faction)
+        UniverseStateService.invalidate_projection_cache()
+        return created
 
     def get_faction_by_slug(self, slug: str) -> Faction:
         faction = self._faction_repository.get_by_slug(slug)
