@@ -980,6 +980,7 @@ body {
 
 .graph-canvas .react-flow__node {
   width: 240px;
+  min-height: 136px;
   padding: 0.9rem 1rem;
   border-radius: 18px;
   border: 1px solid rgba(233, 180, 76, 0.14);
@@ -1058,6 +1059,7 @@ body {
 .graph-node-title {
   font-size: 1rem;
   line-height: 1.25;
+  text-wrap: balance;
 }
 
 .graph-node-era {
@@ -1077,6 +1079,7 @@ body {
   color: var(--muted);
   font-size: 0.76rem;
   line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 

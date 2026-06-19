@@ -79,7 +79,7 @@ const PRO_OPTIONS = Object.freeze({ hideAttribution: true });
 const NODE_ORIGIN: [number, number] = [0, 0];
 
 const NODE_WIDTH = 240;
-const NODE_HEIGHT = 104;
+const NODE_HEIGHT = 136;
 const CHRONOLOGY_COLUMN_GAP = 320;
 const LAYOUT_MARGIN_X = 80;
 const LAYOUT_MARGIN_Y = 60;
