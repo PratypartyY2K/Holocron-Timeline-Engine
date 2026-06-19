@@ -914,6 +914,70 @@ body {
   cursor: pointer;
 }
 
+.graph-rulebook {
+  display: grid;
+  gap: 0.9rem;
+  margin-bottom: 1rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid rgba(233, 180, 76, 0.12);
+  border-radius: 18px;
+  background: rgba(255, 248, 232, 0.04);
+}
+
+.graph-rulebook-header {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.graph-rulebook-label {
+  color: var(--accent);
+  font-size: 0.74rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.graph-rulebook-copy {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.graph-rulebook-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+}
+
+.graph-rulebook-card {
+  display: grid;
+  gap: 0.4rem;
+  padding: 0.85rem 0.9rem;
+  border-radius: 14px;
+  background: rgba(7, 12, 20, 0.62);
+  border: 1px solid rgba(233, 180, 76, 0.08);
+}
+
+.graph-rulebook-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.graph-rulebook-swatch-row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.graph-rulebook-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  display: inline-block;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.16);
+}
+
 .graph-canvas .react-flow__node {
   width: 240px;
   padding: 0.9rem 1rem;

@@ -2,23 +2,23 @@
 
 import type { Route } from "next";
 import dagre from "@dagrejs/dagre";
-import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import ReactFlow, {
+import {
   Background,
   Controls,
   MarkerType,
   MiniMap,
   Position,
+  ReactFlow,
   type Edge,
-  type EdgeTypes,
   type Node,
   type NodeMouseHandler,
   type ReactFlowInstance,
-} from "reactflow";
-import "reactflow/dist/style.css";
+} from "@xyflow/react";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import "@xyflow/react/dist/style.css";
 
-import { CausalEdge } from "./causal-edge";
+import { CAUSAL_EDGE_TYPES } from "./causal-edge";
 import type {
   CausalGraphResponse,
   CausalGraphEdgeRecord,
@@ -62,11 +62,11 @@ type PathSelection = {
   nodes: Set<string>;
 };
 
-const edgeTypes: EdgeTypes = {
-  causal: CausalEdge,
+type ColorRulebookEntry = {
+  color: string;
+  description: string;
+  label: string;
 };
-
-const EDGE_TYPES = Object.freeze(edgeTypes);
 
 const DEFAULT_EDGE_OPTIONS = Object.freeze({
   style: {
@@ -74,6 +74,9 @@ const DEFAULT_EDGE_OPTIONS = Object.freeze({
     strokeWidth: 1.6,
   },
 });
+const FIT_VIEW_OPTIONS = Object.freeze({ padding: 0.2 });
+const PRO_OPTIONS = Object.freeze({ hideAttribution: true });
+const NODE_ORIGIN: [number, number] = [0, 0];
 
 const NODE_WIDTH = 240;
 const NODE_HEIGHT = 104;
@@ -201,13 +204,85 @@ function nodeAccent(event: GraphSourceNode, colorMode: GraphColorMode): string {
     const key = event.era ?? "unclassified-era";
     return GRAPH_ACCENT_PALETTE[hashToPaletteIndex(key)];
   }
-  const key =
-    event.faction_names.length === 0
-      ? "unaligned"
-      : event.faction_names.length === 1
-        ? event.faction_names[0]
-        : "mixed-factions";
+  const key = factionColorKey(event);
   return GRAPH_ACCENT_PALETTE[hashToPaletteIndex(key)];
+}
+
+function factionColorKey(event: GraphSourceNode): string {
+  if (event.faction_names.length === 0) {
+    return "unaligned";
+  }
+  if (event.faction_names.length === 1) {
+    return event.faction_names[0];
+  }
+  return [...event.faction_names].sort((left, right) => left.localeCompare(right)).join(" + ");
+}
+
+function colorRulebookEntries(
+  source: GraphSource,
+  colorMode: GraphColorMode,
+): ColorRulebookEntry[] {
+  if (colorMode === "tone") {
+    return [
+      {
+        label: "Dependency",
+        color: "#70c1b3",
+        description: "Upstream events that support the focused event.",
+      },
+      {
+        label: "Focus event",
+        color: "#e9b44c",
+        description: "The currently selected event at the center of this graph.",
+      },
+      {
+        label: "Consequence",
+        color: "#ff9ba7",
+        description: "Downstream events affected by the focused event.",
+      },
+    ];
+  }
+
+  if (colorMode === "era") {
+    return Array.from(
+      new Map(
+        source.nodes
+          .map((event) => {
+            const label = event.era ?? "Unclassified era";
+            return [
+              label,
+              {
+                label,
+                color: nodeAccent(event, "era"),
+                description: "Nodes in this era share this accent color.",
+              } satisfies ColorRulebookEntry,
+            ] as const;
+          }),
+      ).values(),
+    ).sort((left, right) => left.label.localeCompare(right.label));
+  }
+
+  return Array.from(
+    new Map(
+      source.nodes
+        .map((event) => {
+          const key = factionColorKey(event);
+          const label = key === "unaligned" ? "Unaligned" : key;
+          return [
+            label,
+            {
+              label,
+              color: nodeAccent(event, "faction"),
+              description:
+                key === "unaligned"
+                  ? "Events with no faction tags."
+                  : event.faction_names.length > 1
+                    ? "Events tagged with this exact faction combination."
+                    : "Events tagged to this faction.",
+            } satisfies ColorRulebookEntry,
+          ] as const;
+        }),
+    ).values(),
+  ).sort((left, right) => left.label.localeCompare(right.label));
 }
 
 function toneForNode(
@@ -557,6 +632,18 @@ export function EventFocusGraph({
   const [pathEndNodeId, setPathEndNodeId] = useState<string | null>(null);
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
   const clickTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const defaultEdgeOptions = useMemo(() => DEFAULT_EDGE_OPTIONS, []);
+  const fitViewOptions = useMemo(() => FIT_VIEW_OPTIONS, []);
+  const proOptions = useMemo(() => PRO_OPTIONS, []);
+
+  const miniMapNodeColor = useCallback(
+    (node: Node) =>
+      nodeColor(
+        (node.data as GraphNodeData).tone,
+        (node.data as GraphNodeData).status,
+      ),
+    [],
+  );
 
   const activeSource = useMemo(
     () => currentSource(graph, simulation, simulateEnabled),
@@ -577,6 +664,11 @@ export function EventFocusGraph({
         simulateEnabled,
       }),
     [activeSource, colorMode, pathSelection, pathStartNodeId, simulateEnabled],
+  );
+
+  const rulebookEntries = useMemo(
+    () => colorRulebookEntries(activeSource, colorMode),
+    [activeSource, colorMode],
   );
 
   const handleHoverNoteChange = useCallback((note: string | null) => {
@@ -715,6 +807,34 @@ export function EventFocusGraph({
         </button>
       </div>
 
+      <div className="graph-rulebook">
+        <div className="graph-rulebook-header">
+          <span className="graph-rulebook-label">Color rulebook</span>
+          <p className="graph-rulebook-copy">
+            {colorMode === "tone"
+              ? "Colors represent graph role."
+              : colorMode === "era"
+                ? "Colors represent Star Wars era groupings in the current graph."
+                : "Colors represent faction tagging in the current graph."}
+          </p>
+        </div>
+        <div className="graph-rulebook-grid">
+          {rulebookEntries.map((entry) => (
+            <article key={`${colorMode}:${entry.label}`} className="graph-rulebook-card">
+              <div className="graph-rulebook-swatch-row">
+                <i
+                  className="graph-rulebook-swatch"
+                  style={{ backgroundColor: entry.color }}
+                  aria-hidden="true"
+                />
+                <strong>{entry.label}</strong>
+              </div>
+              <p>{entry.description}</p>
+            </article>
+          ))}
+        </div>
+      </div>
+
       <div className="graph-note-panel" aria-live="polite">
         <span className="graph-note-label">Path inspector</span>
         <p className="graph-note-copy">{hoveredNote ?? pathSummary}</p>
@@ -725,14 +845,14 @@ export function EventFocusGraph({
           nodes={reactFlowGraph.nodes}
           edges={edgesWithHoverData}
           fitView
-          fitViewOptions={{ padding: 0.2 }}
-          proOptions={{ hideAttribution: true }}
+          fitViewOptions={fitViewOptions}
+          proOptions={proOptions}
           nodesDraggable={false}
           nodesConnectable={false}
           elementsSelectable
-          edgeTypes={EDGE_TYPES}
-          defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}
-          nodeOrigin={[0, 0]}
+          edgeTypes={CAUSAL_EDGE_TYPES}
+          defaultEdgeOptions={defaultEdgeOptions}
+          nodeOrigin={NODE_ORIGIN}
           zoomOnDoubleClick={false}
           onInit={setReactFlowInstance}
           onNodeClick={handleNodeClick}
@@ -741,12 +861,7 @@ export function EventFocusGraph({
           <MiniMap
             pannable
             zoomable
-            nodeColor={(node) =>
-              nodeColor(
-                (node.data as GraphNodeData).tone,
-                (node.data as GraphNodeData).status,
-              )
-            }
+            nodeColor={miniMapNodeColor}
             maskColor="rgba(5, 11, 18, 0.6)"
           />
           <Controls showInteractive={false} />

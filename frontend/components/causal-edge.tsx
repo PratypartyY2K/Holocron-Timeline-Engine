@@ -1,11 +1,19 @@
 "use client";
 
-import { BaseEdge, getBezierPath, type EdgeProps } from "reactflow";
+import {
+  BaseEdge,
+  getBezierPath,
+  type Edge,
+  type EdgeProps,
+  type EdgeTypes,
+} from "@xyflow/react";
 
 type CausalEdgeData = {
   note?: string;
   onHoverNoteChange?: (note: string | null) => void;
 };
+
+type CausalEdgeRecord = Edge<CausalEdgeData, "causal">;
 
 export function CausalEdge({
   id,
@@ -18,7 +26,7 @@ export function CausalEdge({
   markerEnd,
   style,
   data,
-}: EdgeProps<CausalEdgeData>) {
+}: EdgeProps<CausalEdgeRecord>) {
   const [path] = getBezierPath({
     sourceX,
     sourceY,
@@ -43,3 +51,7 @@ export function CausalEdge({
     </>
   );
 }
+
+export const CAUSAL_EDGE_TYPES: EdgeTypes = {
+  causal: CausalEdge,
+};
