@@ -15,6 +15,15 @@ High-level flow:
 
 ## Architecture Diagrams
 
+```mermaid
+graph TD
+    NextJS["Next.js Frontend"] -->|REST API| FastAPI["FastAPI API Layer"]
+    FastAPI -->|Business Logic| Engine["Engine Services"]
+    Engine -->|Cypher Queries| Neo4j["Neo4j Graph DB"]
+    RawData["data/raw + scripts/transform.py"] -->|Compiled Dataset| Ingestion["Ingestion Pipeline"]
+    Ingestion -->|Validated Writes| FastAPI
+```
+
 ### HLD
 
 ```text
@@ -106,6 +115,26 @@ The main relationship categories are:
 - `SETS_ARTIFACT_LOCATION`
 
 The first six relationships describe graph structure and archive semantics. The `SETS_*` relationships are temporal mutations used to project timeline state over time.
+
+## System Mechanics
+
+### Chronology Normalization
+
+Chronology is normalized into signed integer years before it reaches the backend:
+
+- `32 BBY` becomes `-32`
+- `4 ABY` becomes `4`
+- `0 ABY` is stored as `0`
+
+The frontend parses Star Wars-style chronology labels into signed numbers, and the backend stores `start_year` and `end_year` as integers. This keeps timeline filtering, sorting, graph traversal, and mutation replay on one consistent numeric axis instead of mixing display labels with logic.
+
+### Crossing the 0 BBY/ABY Boundary
+
+The implementation handles cross-boundary event ranges as plain numeric intervals. For example:
+
+- `1 BBY -> 1 ABY` becomes `start_year = -1`, `end_year = 1`
+
+This works without special-case era logic because the backend only requires `end_year >= start_year`. Event creation, ingestion, and API validation all use that rule, and event filtering compares `start_year` and `end_year` numerically. In practice that means an event spanning the boundary sorts, validates, and filters correctly on the same timeline axis as every other event.
 
 ## Data Model Diagram
 
