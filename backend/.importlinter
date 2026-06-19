@@ -1,10 +1,41 @@
 [importlinter]
 root_package = app
 
-[contract:layers]
-name = Enforce backend layers
-type = layers
-layers =
-    api
-    engine
-    repositories
+[contract:domain_independence]
+name = Domain stays independent
+type = forbidden
+source_modules =
+    app.domain
+forbidden_modules =
+    app.api
+    app.engine
+    app.repositories
+    app.schemas
+    app.db
+    app.core
+    app.observability
+    app.ingestion
+
+[contract:engine_not_http]
+name = Engine does not depend on API layer
+type = forbidden
+source_modules =
+    app.engine
+forbidden_modules =
+    app.api
+
+[contract:engine_not_neo4j]
+name = Engine does not depend on Neo4j implementations
+type = forbidden
+source_modules =
+    app.engine
+forbidden_modules =
+    app.repositories.neo4j
+
+[contract:api_not_neo4j]
+name = API does not depend on Neo4j implementations directly
+type = forbidden
+source_modules =
+    app.api
+forbidden_modules =
+    app.repositories.neo4j
