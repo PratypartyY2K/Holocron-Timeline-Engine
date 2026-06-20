@@ -2,16 +2,17 @@
 
 ## Overview
 
-Holocron Timeline Engine is split into a Next.js frontend, a FastAPI backend, and Neo4j as the persistent graph store. The backend follows a layered design:
+Holocron Timeline Engine is a graph-based system for modeling and simulating causal timelines.
 
-- API routes handle HTTP request and response concerns
-- Engine services apply business rules and orchestration
-- Repository implementations run Neo4j queries
-- Domain entities define the core data model
+- `frontend/` is a Next.js UI for search, timeline browsing, graph exploration, and what-if simulation
+- `backend/app/api/` exposes FastAPI routes under `/api/v1`
+- `backend/app/engine/` contains business logic for traversal, simulation, relationships, and universe-state projection
+- `backend/app/repositories/neo4j/` translates engine operations into Cypher
+- Neo4j is the persistent graph store and source of truth
 
-High-level flow:
+Request flow:
 
-`Frontend -> /api/v1 routes -> engine services -> Neo4j repositories -> Neo4j`
+`Frontend -> FastAPI routes -> engine services -> Neo4j repositories -> Neo4j`
 
 ## Architecture Diagrams
 
@@ -51,9 +52,6 @@ frontend/app + components
 backend/app/api/routes
         |
         v
-backend/app/api/dependencies
-        |
-        v
 backend/app/engine/services
         |
         v
@@ -66,75 +64,47 @@ backend/app/repositories/neo4j
 backend/app/domain + backend/app/schemas
 ```
 
-## System Structure
+## Core Model
 
-### Frontend
-
-The frontend lives in `frontend/` and uses the App Router. It provides:
-
-- the homepage search experience
-- timeline browsing under `/events`
-- slug-based entity detail pages
-- event detail views with causal graph rendering and what-if simulation controls
-
-The UI reads backend data through `frontend/lib/holocron-api.ts` and related client helpers, then renders the result in page-level client components such as `home-page-client.tsx`, `entity-pages-client.tsx`, and `event-detail-page-client.tsx`.
-
-### Backend
-
-The backend lives in `backend/app/` and is organized by responsibility:
-
-- `api/` defines FastAPI routers, dependency injection, and error mapping
-- `engine/services/` contains application logic
-- `repositories/interfaces/` defines persistence contracts
-- `repositories/neo4j/` implements those contracts with Cypher
-- `domain/entities/` and `domain/enums.py` define the core model
-- `schemas/` contains transport-layer request and response models
-
-`backend/app/main.py` creates the FastAPI app, adds CORS and request logging middleware, then mounts all routes under `/api/v1`.
-
-## Core Domain Model
-
-The graph currently revolves around four node types:
+### Node Types
 
 - `Event`
 - `Character`
 - `Planet`
 - `Faction`
 
-The main relationship categories are:
+### Relationship Types
 
-- `CAUSES`
-- `INVOLVES`
-- `LOCATED_IN`
-- `MEMBER_OF`
-- `ALLIED_WITH`
-- `ENEMY_OF`
-- `SETS_ALIVE_STATE`
-- `SETS_CHARACTER_LOCATION`
-- `SETS_PLANET_CONTROL`
-- `SETS_ARTIFACT_LOCATION`
+- Structural: `CAUSES`, `INVOLVES`, `LOCATED_IN`, `MEMBER_OF`, `ALLIED_WITH`, `ENEMY_OF`
+- State-changing: `SETS_ALIVE_STATE`, `SETS_CHARACTER_LOCATION`, `SETS_PLANET_CONTROL`, `SETS_ARTIFACT_LOCATION`
 
-The first six relationships describe graph structure and archive semantics. The `SETS_*` relationships are temporal mutations used to project timeline state over time.
+The structural edges describe chronology and archive semantics. The `SETS_*` edges let events modify world state over time.
 
 ## System Mechanics
 
 ### Chronology Normalization
 
-Chronology is normalized into signed integer years before it reaches the backend:
+Chronology is stored as signed integers:
 
-- `32 BBY` becomes `-32`
-- `4 ABY` becomes `4`
-- `0 ABY` is stored as `0`
+- `32 BBY` -> `-32`
+- `4 ABY` -> `4`
+- `0 ABY` -> `0`
 
-The frontend parses Star Wars-style chronology labels into signed numbers, and the backend stores `start_year` and `end_year` as integers. This keeps timeline filtering, sorting, graph traversal, and mutation replay on one consistent numeric axis instead of mixing display labels with logic.
+This keeps filtering, sorting, traversal, and mutation replay on one numeric axis.
 
-### Crossing the 0 BBY/ABY Boundary
+### Zero-Boundary Behavior
 
-The implementation handles cross-boundary event ranges as plain numeric intervals. For example:
+Cross-boundary events are stored as normal intervals:
 
 - `1 BBY -> 1 ABY` becomes `start_year = -1`, `end_year = 1`
 
-This works without special-case era logic because the backend only requires `end_year >= start_year`. Event creation, ingestion, and API validation all use that rule, and event filtering compares `start_year` and `end_year` numerically. In practice that means an event spanning the boundary sorts, validates, and filters correctly on the same timeline axis as every other event.
+Display chronology has no historical year zero, but the engine deliberately keeps a mathematical `0` internally so:
+
+- interval math stays continuous
+- comparisons and indexing do not need boundary-specific rules
+- replay and offset calculations do not need BBY/ABY special cases
+
+`0` is an internal scalar convenience, not a canonical calendar claim.
 
 ## Data Model Diagram
 
@@ -156,208 +126,121 @@ This works without special-case era logic because the backend only requires `end
 
 ## Simulation Engine
 
-The simulation engine is centered on `TimelineSimulationService`.
+`TimelineSimulationService` powers `GET /api/v1/engine/simulate-break/{event_id}`.
 
 ### Inputs
 
-`GET /api/v1/engine/simulate-break/{event_id}` loads:
-
-- the selected event
-- a downstream causal subgraph
-- dependency metadata for each downstream event
-
-The graph data comes from the event repository, which returns:
-
-- downstream events reachable through `CAUSES`
-- internal causal edges among those events
-- dependency ids keyed by event id
+- selected event
+- downstream causal subgraph
+- dependency metadata for affected events
 
 ### Processing
 
-The engine performs a topological traversal over the downstream subgraph:
+The engine:
 
-1. It marks the selected event as `broken`.
-2. It computes a topological order from the causal edges.
-3. For each downstream event, it inspects the status of its dependencies.
-4. It classifies the event as `invalidated` when all required support is broken.
-5. It classifies the event as `unresolved` when some support survives or is itself unresolved.
-
-Each simulation node also includes:
-
-- `topological_rank`
-- `affected_by_event_ids`
-- `surviving_dependency_count`
-- `broken_dependency_count`
-- `unresolved_dependency_count`
+1. marks the selected event as `broken`
+2. computes a topological order over the downstream subgraph
+3. evaluates each event from its dependency status
+4. marks nodes as `invalidated` or `unresolved` when support collapses or becomes partial
 
 ### Output
 
-The API returns a `TimelineBreakSimulationResponse` containing:
+The response returns:
 
-- the broken root event id
-- enriched simulation nodes
+- simulation nodes with status and dependency counts
 - causal edges
-- the computed topological order
+- topological order
 
-The frontend uses that payload in a single long-lived React Flow canvas. Instead of remounting a separate what-if graph, it derives the active node and edge set from either the canonical graph or the simulation response, reruns Dagre layout over that active dataset, and applies status-based styling for `broken`, `invalidated`, and `unresolved` nodes.
+The frontend renders canonical and simulated states in one React Flow canvas and reruns layout over the active dataset instead of mounting separate graphs.
 
-### Frontend Graph Rendering
+## Scaling Characteristics
 
-The event detail graph keeps one React Flow instance alive across canonical and what-if states:
+The backend does not maintain a global in-memory graph cache.
 
-- canonical and simulation views share the same graph component
-- nodes and edges are recomputed from the active dataset rather than namespaced into a separate canvas
-- Dagre layout is rerun when the active graph changes
-- simulation state is expressed through node and edge styling instead of remount-driven graph replacement
+- Neo4j is the source of truth
+- FastAPI instances are stateless with respect to graph topology
+- traversals run through Cypher queries
+- simulation logic runs on request-scoped subgraphs
 
-This reduces the risk of stale event handlers, orphaned DOM nodes, and unnecessary React Flow churn when toggling the what-if simulation on large graphs.
+### Why This Helps
 
-## Current Scaling Characteristics
+- horizontal scaling is simpler
+- cross-instance graph synchronization is not required
+- writes become visible through subsequent Neo4j reads
 
-The current system does not maintain a global in-memory graph cache inside FastAPI. There is no process-wide `NetworkX` graph being hydrated at boot and shared across requests.
+### Main Bottlenecks
 
-Instead:
+- deep traversal cost in Neo4j
+- larger payloads for graph and simulation endpoints
+- Python post-processing on returned subgraphs
+- frontend rendering cost for dense node and edge sets
 
-- Neo4j is the source of truth for graph state
-- FastAPI instances are effectively stateless with respect to event and relationship data
-- graph traversals are executed through repository-level Cypher queries
-- Python-side simulation logic runs on the request-scoped subgraph returned from Neo4j
+### Likely Upgrade Paths
 
-### Horizontal Scaling
+- tighter depth and result-size limits
+- more aggressive Cypher tuning and indexing
+- precomputed summaries for hot graph views
+- Neo4j Graph Data Science for heavier analysis
+- Redis or pub/sub only if shared in-memory graph materializations are introduced later
 
-Because instances read graph state directly from Neo4j, horizontal scaling does not create an in-memory graph synchronization problem in the current architecture. If one instance handles `POST /api/v1/events` or `POST /api/v1/graph/relationships`, the persisted update is visible to other instances through subsequent Neo4j reads.
+## Mutation and Universe State
 
-That means the current system does not need cache invalidation or pub/sub just to keep multiple FastAPI containers consistent.
+Events can modify world state without storing snapshots directly on nodes.
 
-### Real Bottlenecks
+### Mutation Rules
 
-As the dataset grows from a small archive to a much larger graph, the main scaling pressures are more likely to be:
+`RelationshipService` validates writes before Neo4j persistence:
 
-- Neo4j query cost for deep traversal and graph assembly
-- larger API payloads for causal graphs and simulation responses
-- Python post-processing time on returned subgraphs
-- frontend rendering cost for dense React Flow node and edge sets
-
-The most sensitive paths are likely to be:
-
-- event dependency and consequence traversal
-- event-focused causal graph assembly
-- break-simulation requests over large downstream graphs
-- universe-state projection when the mutation catalog grows substantially
-
-### MVP Limitation
-
-The current design favors correctness and simplicity over aggressive precomputation or caching. This is appropriate for the current scale, but large graph growth will eventually require tighter controls on traversal breadth, payload size, and simulation scope.
-
-### Upgrade Paths
-
-If graph size or traffic increases significantly, likely next steps are:
-
-- tighter depth and result-size limits on traversal-heavy endpoints
-- more specialized Cypher query tuning and indexing
-- precomputed projections or summaries for hot graph views
-- Neo4j Graph Data Science for heavier analytical workloads if the use cases move beyond straightforward traversal
-- Redis or pub/sub only if the architecture later introduces shared in-memory graph caches or derived graph materializations inside application instances
-
-## Mutation System
-
-The mutation system lets events author changes to world state without embedding those state snapshots directly on nodes.
-
-### Mutation Relationship Types
-
-The supported temporal mutation edges are:
-
-- `SETS_ALIVE_STATE`
-- `SETS_CHARACTER_LOCATION`
-- `SETS_PLANET_CONTROL`
-- `SETS_ARTIFACT_LOCATION`
-
-These are created through the normal relationship API and validated by `RelationshipService`.
-
-### Validation Rules
-
-`RelationshipService` enforces several rules before writing a relationship:
-
-- source and target nodes must exist
-- the relationship type must be valid for the source/target node pair
+- endpoints must exist
+- unsupported source/target combinations are rejected
 - self-referential edges are rejected
+- duplicate edges are rejected
 - `CAUSES` edges cannot introduce cycles
-- `CAUSES` edges cannot violate chronology ordering
-- canonical symmetric relationships such as `ALLIED_WITH` and `ENEMY_OF` are normalized to a stable endpoint order
-- duplicates are rejected based on type, endpoints, and mutation qualifiers such as `subject_node_id` or `artifact_key`
+- `CAUSES` edges cannot violate chronology
+- symmetric relationships are normalized to a stable endpoint order
 
-This keeps graph semantics and state changes consistent regardless of whether data enters through the API or backfill scripts.
+### Universe-State Reconstruction
 
-### Universe State Reconstruction
+`UniverseStateService` reconstructs the world before a focus event by combining:
 
-`UniverseStateService` reconstructs a projected state before a focus event by combining:
+- curated baseline state
+- prior events
+- prior `SETS_*` mutations
 
-- curated baseline state from `engine/universe_state_catalog.py`
-- the full event list up to the focus event
-- all mutation relationships that occur before the focus event
-
-It starts from baseline values for tracked characters, faction control, and artifacts, then replays mutations in chronological order. The resulting `UniverseState` includes:
+It replays mutations in chronology order to derive:
 
 - character alive/location state
 - faction control by planet
 - artifact holder or location
-- projection notes and metadata
 
-This gives the event detail page a snapshot of the galaxy as of the selected point in the timeline.
+### Checkpoints
 
-### Universe State Checkpoints
+Universe-state reads use process-local checkpoints at era boundaries so repeated requests replay only the remaining mutation delta.
 
-The universe-state projection path now uses process-local checkpoints to reduce full mutation replay on repeated requests:
+Tradeoff:
 
-- a base tracked-state snapshot is built from the curated baseline catalog
-- mutation relationships are grouped by authored event
-- checkpoint snapshots are cached at era boundaries after replaying mutations through the last event in that era
-- requests for `GET /api/v1/events/{event_id}/universe-state` resume from the nearest prior checkpoint and replay only the remaining event delta
+- warm reads get faster
+- cache is local to one FastAPI instance
+- multi-instance coordination would need extra invalidation only if stronger distributed cache coherence becomes necessary
 
-This improves repeated reads on a warm application instance, especially when the mutation catalog grows.
+### Backfill
 
-Current limitation:
+Curated state history is loaded through `TemporalMutationBackfillService`, which resolves slugs and writes through the same validation path as the API.
 
-- the checkpoint cache is local to a running FastAPI process
-- local write paths invalidate that process cache after event, entity, or relationship creation
-- multi-instance deployments still rely on Neo4j as the source of truth, so cross-instance cache coordination would require an additional invalidation mechanism if stronger distributed cache coherence becomes necessary
+## Repository and Data Flow
 
-### Backfill Workflow
+- `Neo4jEventRepository` handles event listing, traversal, causal graph assembly, impact analysis, and break-simulation graph queries
+- `Neo4jGraphRepository` stores relationships, validates references, runs search, and lists prior state mutations
+- character, planet, and faction repositories support entity lookup and creation
 
-`TemporalMutationBackfillService` turns curated aliases from `universe_state_catalog.py` into actual graph relationships. It:
+Data import stays outside the HTTP layer:
 
-- resolves event and entity slugs
-- plans mutation writes
-- skips missing entities and records diagnostics
-- writes through `RelationshipService`
-- treats duplicates as safe no-op skips
-
-Because the backfill runs through the same validation path as the API, it keeps the mutation catalog and live graph rules aligned.
-
-## Repository Responsibilities
-
-The Neo4j repositories do more than raw CRUD:
-
-- `Neo4jEventRepository` supports event listing, dependency traversal, consequence traversal, causal graph assembly, impact analysis, and break-simulation graph queries
-- `Neo4jGraphRepository` validates node references, stores relationships, runs search, and lists prior state mutations
-- character, planet, and faction repositories provide entity lookup and creation
-
-The repositories also enrich event reads with computed fields such as dependency counts, faction slugs, and a simple centrality score.
-
-## Ingestion and Seed Data
-
-Archive content is prepared outside the HTTP layer:
-
-- `scripts/transform.py` compiles raw data fragments into `data/processed/dataset.json`
-- `scripts/ingest.py` pushes the transformed dataset through backend ingestion code
+- `scripts/transform.py` compiles archive data
+- `scripts/ingest.py` loads the transformed dataset
 - `scripts/seed/init_schema.cypher` initializes Neo4j schema
-- `scripts/audit/relationship_integrity.cypher` audits data integrity in the graph
-
-This keeps import logic reproducible and lets the project reuse service-layer validation during ingest.
+- `scripts/audit/relationship_integrity.cypher` audits graph integrity
 
 ## Example Queries
-
-Example Cypher patterns used by the system:
 
 ```cypher
 MATCH (source:Event)-[:CAUSES*1..]->(target:Event {id: $event_id})
