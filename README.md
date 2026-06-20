@@ -26,6 +26,14 @@ Holocron Timeline Engine is a graph-based system for modeling, exploring, and si
 - Separation of engine logic from the API layer
 - Typed API layer built with FastAPI and Pydantic
 
+## Performance Notes
+
+- Deep dependency and consequence traversals become more expensive as the graph grows, because the backend assembles request-scoped subgraphs directly from Neo4j.
+- Causal graph and simulation endpoints can produce larger payloads than simple entity lookups, especially when traversal depth or downstream fan-out increases.
+- Timeline-break simulation cost grows with the size of the downstream subgraph, since the engine performs topological propagation over the affected branch rather than a constant-time lookup.
+
+For deeper performance and scaling discussion, see [docs/architecture.md](docs/architecture.md).
+
 ## Demo Routes
 
 - `/` search-driven homepage and archive entry point
