@@ -7,7 +7,7 @@ Holocron Timeline Engine is a graph-based system for modeling, exploring, and si
 - Graph-based timeline modeling system for causally linked events
 - Interactive archive for events, characters, planets, and factions
 - Alternate-timeline simulator for testing "what if" breaks in event chains
-- Universe-state projection system for reconstructing character, faction, and artifact state before a selected event
+- State-replay system that reconstructs the world before a selected event by applying prior changes such as character deaths, planet control shifts, and artifact movement
 
 ## Key Features
 
@@ -15,8 +15,8 @@ Holocron Timeline Engine is a graph-based system for modeling, exploring, and si
 - Slug-based detail pages for events, characters, planets, and factions
 - Causal graph views for event dependencies, consequences, and alternate simulated branches
 - Search across events, characters, planets, and factions
-- Relationship authoring API for graph edges and temporal mutations
-- Curated mutation backfill pipeline for restoring timeline state into Neo4j
+- Relationship authoring API for causal links and world-state changes authored by events
+- Curated backfill pipeline for loading state-changing event history into Neo4j
 
 ## Engineering Highlights
 
