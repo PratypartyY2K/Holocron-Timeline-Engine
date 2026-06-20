@@ -154,6 +154,14 @@ holocron/
 - `docker/` centralizes local orchestration concerns
 - `scripts/` holds reproducible operational scripts instead of ad hoc shell usage
 
+## 4A. Tradeoffs
+
+The current design intentionally favors clarity and scale-out simplicity over squeezing every possible optimization into the MVP.
+
+- Neo4j was chosen over a relational database because causal traversal, dependency expansion, and path-oriented graph queries are simpler to express and reason about in a native graph model. The tradeoff is accepting a more specialized persistence stack and a smaller hiring and tooling ecosystem than a conventional SQL deployment.
+- The architecture avoids a global in-memory graph inside the FastAPI application. That reduces boot-time hydration work and removes cross-instance graph synchronization problems when the backend scales horizontally. The tradeoff is that traversal-heavy requests rely on live Neo4j reads instead of an already-materialized process-local graph.
+- The backend is effectively stateless with respect to event and relationship topology. That makes container scaling, rolling deploys, and multi-instance consistency simpler. The tradeoff is higher query cost for deep graph assembly and repeated traversal work that a shared in-memory cache might avoid.
+
 ## 5. Backend Folder Structure
 
 ```text
