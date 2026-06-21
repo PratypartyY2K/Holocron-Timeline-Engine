@@ -146,6 +146,7 @@ class FakeGraphRepository(GraphRepository):
         self.event_chronology_by_id: dict[str, tuple[int, int | None]] = {}
         self.search_results: list[SearchResult] = []
         self.list_state_mutations_before_event_calls: list[str] = []
+        self.projection_cache_version = "v1"
 
     def get_node_reference(self, node_id: str) -> NodeReference | None:
         return self.nodes_by_id.get(node_id)
@@ -232,6 +233,9 @@ class FakeGraphRepository(GraphRepository):
         ]
         items.sort(key=lambda item: (event_keys[item.from_node_id][0], item.from_node_id, item.id))
         return items
+
+    def get_projection_cache_version(self) -> str:
+        return self.projection_cache_version
 
 
 def make_node(node_id: str, node_type: NodeType) -> NodeReference:

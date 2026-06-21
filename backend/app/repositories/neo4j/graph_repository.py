@@ -241,3 +241,55 @@ class Neo4jGraphRepository(Neo4jRepositoryBase, GraphRepository):
             ],
         )
         return [map_relationship_record(dict(record["relationship"])) for record in result]
+
+    def get_projection_cache_version(self) -> str:
+        query = """
+        CALL {
+            MATCH (e:Event)
+            RETURN count(e) AS event_count, max(e.updated_at) AS max_event_updated_at
+        }
+        CALL {
+            MATCH (c:Character)
+            RETURN count(c) AS character_count, max(c.updated_at) AS max_character_updated_at
+        }
+        CALL {
+            MATCH (p:Planet)
+            RETURN count(p) AS planet_count, max(p.updated_at) AS max_planet_updated_at
+        }
+        CALL {
+            MATCH (f:Faction)
+            RETURN count(f) AS faction_count, max(f.updated_at) AS max_faction_updated_at
+        }
+        CALL {
+            MATCH ()-[r]->()
+            RETURN count(r) AS relationship_count, max(r.updated_at) AS max_relationship_updated_at
+        }
+        RETURN
+            event_count,
+            character_count,
+            planet_count,
+            faction_count,
+            relationship_count,
+            max_event_updated_at,
+            max_character_updated_at,
+            max_planet_updated_at,
+            max_faction_updated_at,
+            max_relationship_updated_at
+        """
+        record = self._run_single(query_name="graph.get_projection_cache_version", query=query)
+        if record is None:
+            return "empty"
+        return "|".join(
+            [
+                f"events:{record['event_count']}",
+                f"characters:{record['character_count']}",
+                f"planets:{record['planet_count']}",
+                f"factions:{record['faction_count']}",
+                f"relationships:{record['relationship_count']}",
+                f"event_ts:{record['max_event_updated_at'] or 'none'}",
+                f"character_ts:{record['max_character_updated_at'] or 'none'}",
+                f"planet_ts:{record['max_planet_updated_at'] or 'none'}",
+                f"faction_ts:{record['max_faction_updated_at'] or 'none'}",
+                f"relationship_ts:{record['max_relationship_updated_at'] or 'none'}",
+            ]
+        )

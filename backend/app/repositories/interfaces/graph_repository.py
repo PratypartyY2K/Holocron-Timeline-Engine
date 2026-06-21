@@ -41,3 +41,7 @@ class GraphRepository(ABC):
     @abstractmethod
     def list_state_mutations_before_event(self, *, event_id: str) -> list[Relationship]:
         raise NotImplementedError
+
+    @abstractmethod
+    def get_projection_cache_version(self) -> str:
+        raise NotImplementedError

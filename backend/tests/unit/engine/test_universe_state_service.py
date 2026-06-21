@@ -192,6 +192,45 @@ def test_state_before_battle_of_exegol_includes_earlier_character_deaths() -> No
     assert characters["sheev-palpatine"].is_alive is True
 
 
+def test_projection_cache_reuses_warm_version_and_rebuilds_on_version_change() -> None:
+    UniverseStateService.invalidate_projection_cache()
+    service = make_service()
+    graph_repository = service._graph_repository
+
+    service.get_state_before_event("event-battle-yavin")
+    service.get_state_before_event("event-battle-yavin")
+
+    assert graph_repository.list_state_mutations_before_event_calls == ["event-battle-exegol"]
+
+    graph_repository.projection_cache_version = "v2"
+    service.get_state_before_event("event-battle-yavin")
+
+    assert graph_repository.list_state_mutations_before_event_calls == [
+        "event-battle-exegol",
+        "event-battle-exegol",
+    ]
+
+
+def test_projection_cache_prunes_old_versions() -> None:
+    UniverseStateService.invalidate_projection_cache()
+    original_max_entries = UniverseStateService._projection_cache_max_entries
+    UniverseStateService._projection_cache_max_entries = 1
+    try:
+        service = make_service()
+        graph_repository = service._graph_repository
+
+        service.get_state_before_event("event-battle-yavin")
+        assert len(UniverseStateService._projection_cache_by_version) == 1
+
+        graph_repository.projection_cache_version = "v2"
+        service.get_state_before_event("event-battle-yavin")
+
+        assert list(UniverseStateService._projection_cache_by_version) == ["v2"]
+    finally:
+        UniverseStateService._projection_cache_max_entries = original_max_entries
+        UniverseStateService.invalidate_projection_cache()
+
+
 def test_state_projection_prefers_graph_mutation_edges_when_present() -> None:
     UniverseStateService.invalidate_projection_cache()
     event_repository = FakeEventRepository()

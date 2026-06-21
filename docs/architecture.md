@@ -215,13 +215,16 @@ It replays mutations in chronology order to derive:
 
 ### Checkpoints
 
-Universe-state reads use process-local checkpoints at era boundaries so repeated requests replay only the remaining mutation delta.
+Universe-state reads use checkpoint snapshots at era boundaries so repeated requests replay only the remaining mutation delta.
 
 Tradeoff:
 
 - warm reads get faster
-- cache is local to one FastAPI instance
-- multi-instance coordination would need extra invalidation only if stronger distributed cache coherence becomes necessary
+- cached snapshots are still held in-process for speed
+- cache reuse is gated by a database-derived version token, so instances rebuild when persisted graph state changes
+- entries are bounded by TTL and cache-size limits to avoid unbounded process memory growth
+
+This is a safer intermediate step than relying on local invalidation alone, but a dedicated distributed cache such as Redis would still be the next step if universe-state reads become hot across many application instances.
 
 ### Backfill
 

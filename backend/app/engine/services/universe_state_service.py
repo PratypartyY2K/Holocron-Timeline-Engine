@@ -2,6 +2,7 @@ from collections.abc import Mapping
 from copy import deepcopy
 from dataclasses import dataclass, field
 from threading import RLock
+from time import monotonic
 
 from app.domain.entities.character import Character
 from app.domain.entities.event import Event
@@ -40,6 +41,7 @@ class _ProjectionState:
 
 @dataclass(slots=True)
 class _ProjectionCache:
+    version: str
     events_by_id: dict[str, Event]
     sorted_events: list[Event]
     characters_by_id: dict[str, Character]
@@ -50,9 +52,18 @@ class _ProjectionCache:
     base_state: _ProjectionState
 
 
+@dataclass(slots=True)
+class _ProjectionCacheEntry:
+    cache: _ProjectionCache
+    expires_at: float
+    last_accessed_at: float
+
+
 class UniverseStateService:
-    _projection_cache: _ProjectionCache | None = None
+    _projection_cache_by_version: dict[str, _ProjectionCacheEntry] = {}
     _projection_cache_lock = RLock()
+    _projection_cache_ttl_seconds = 300.0
+    _projection_cache_max_entries = 2
 
     def __init__(
         self,
@@ -72,7 +83,7 @@ class UniverseStateService:
     @classmethod
     def invalidate_projection_cache(cls) -> None:
         with cls._projection_cache_lock:
-            cls._projection_cache = None
+            cls._projection_cache_by_version.clear()
 
     def get_state_before_event(self, event_id: str) -> UniverseState:
         projection_cache = self._get_or_build_projection_cache()
@@ -105,12 +116,42 @@ class UniverseStateService:
 
     def _get_or_build_projection_cache(self) -> _ProjectionCache:
         cache_cls = type(self)
+        version = self._graph_repository.get_projection_cache_version()
+        now = monotonic()
         with cache_cls._projection_cache_lock:
-            if cache_cls._projection_cache is None:
-                cache_cls._projection_cache = self._build_projection_cache()
-            return cache_cls._projection_cache
+            cache_cls._prune_projection_cache(now)
+            entry = cache_cls._projection_cache_by_version.get(version)
+            if entry is not None and entry.expires_at > now:
+                entry.last_accessed_at = now
+                return entry.cache
 
-    def _build_projection_cache(self) -> _ProjectionCache:
+            cache = self._build_projection_cache(version=version)
+            cache_cls._projection_cache_by_version[version] = _ProjectionCacheEntry(
+                cache=cache,
+                expires_at=now + cache_cls._projection_cache_ttl_seconds,
+                last_accessed_at=now,
+            )
+            cache_cls._prune_projection_cache(now)
+            return cache
+
+    @classmethod
+    def _prune_projection_cache(cls, now: float) -> None:
+        expired_versions = [
+            version
+            for version, entry in cls._projection_cache_by_version.items()
+            if entry.expires_at <= now
+        ]
+        for version in expired_versions:
+            del cls._projection_cache_by_version[version]
+
+        while len(cls._projection_cache_by_version) > cls._projection_cache_max_entries:
+            oldest_version = min(
+                cls._projection_cache_by_version.items(),
+                key=lambda item: item[1].last_accessed_at,
+            )[0]
+            del cls._projection_cache_by_version[oldest_version]
+
+    def _build_projection_cache(self, *, version: str) -> _ProjectionCache:
         sorted_events = self._list_sorted_events()
         events_by_id = {event.id: event for event in sorted_events}
         planets_by_slug, planets_by_id = self._load_planet_maps()
@@ -131,6 +172,7 @@ class UniverseStateService:
             factions_by_id=factions_by_id,
         )
         return _ProjectionCache(
+            version=version,
             events_by_id=events_by_id,
             sorted_events=sorted_events,
             characters_by_id=characters_by_id,
