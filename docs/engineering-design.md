@@ -2,14 +2,6 @@
 
 ## Engineering Design Document
 
-### Status
-
-Design only. No implementation code is included in this document.
-
-### Date
-
-2026-06-05
-
 ## 1. Overview
 
 Holocron Timeline Engine is an interactive Star Wars knowledge graph and timeline explorer. The system combines:
