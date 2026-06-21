@@ -162,6 +162,16 @@ The current design intentionally favors clarity and scale-out simplicity over sq
 - The architecture avoids a global in-memory graph inside the FastAPI application. That reduces boot-time hydration work and removes cross-instance graph synchronization problems when the backend scales horizontally. The tradeoff is that traversal-heavy requests rely on live Neo4j reads instead of an already-materialized process-local graph.
 - The backend is effectively stateless with respect to event and relationship topology. That makes container scaling, rolling deploys, and multi-instance consistency simpler. The tradeoff is higher query cost for deep graph assembly and repeated traversal work that a shared in-memory cache might avoid.
 
+## 4B. Timeline Simulation Validation
+
+The primary differentiator in the backend is the timeline break simulation flow, so it needs stronger validation than simple hand-authored examples.
+
+- `TimelineSimulationService` is validated with focused deterministic unit tests for small hand-built graphs and a larger chaos harness.
+- The chaos harness lives in `backend/tests/unit/engine/test_chaos_simulation.py`.
+- That test programmatically builds a deterministic 500-event mock tree, injects mixed dependency shapes, and samples broken nodes from multiple topological ranks.
+- For each simulated break, the test computes the expected downstream propagation independently and asserts exact node states, dependency counters, and topological order.
+- The purpose is to catch execution-order bugs, unstable status propagation, and unhandled errors under larger downstream fan-out before any Neo4j integration is involved.
+
 ## 5. Backend Folder Structure
 
 ```text

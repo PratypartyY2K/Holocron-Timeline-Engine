@@ -129,3 +129,12 @@ python -m app.scripts.backfill_temporal_mutations
 cd backend
 pytest
 ```
+
+Focused simulation stress test:
+
+```bash
+cd backend
+pytest tests/unit/engine/test_chaos_simulation.py
+```
+
+`tests/unit/engine/test_chaos_simulation.py` builds a deterministic 500-event mock tree, breaks events sampled across multiple topological ranks, and verifies that `TimelineSimulationService` produces stable downstream `BROKEN`, `INVALIDATED`, and `UNRESOLVED` states without unhandled execution errors.
