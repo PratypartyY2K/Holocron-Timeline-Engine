@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
     slow_request_threshold_ms: float = Field(default=1000.0, alias="SLOW_REQUEST_THRESHOLD_MS")
     slow_query_threshold_ms: float = Field(default=250.0, alias="SLOW_QUERY_THRESHOLD_MS")
+    neo4j_query_timeout_seconds: float = Field(
+        default=3.0,
+        alias="NEO4J_QUERY_TIMEOUT_SECONDS",
+    )
     neo4j_uri: str = Field(alias="NEO4J_URI")
     neo4j_username: str = Field(alias="NEO4J_USERNAME")
     neo4j_password: str = Field(alias="NEO4J_PASSWORD")

@@ -111,3 +111,5 @@ class EventService:
     def _validate_depth(depth: int | None) -> None:
         if depth is not None and depth <= 0:
             raise ValidationError("depth must be greater than 0")
+        if depth is not None and depth > 8:
+            raise ValidationError("depth must be less than or equal to 8")

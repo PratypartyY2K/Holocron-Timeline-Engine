@@ -205,6 +205,26 @@ def test_dependency_depth_must_be_positive() -> None:
         service.list_dependencies("event-1", depth=0)
 
 
+def test_dependency_depth_must_not_exceed_maximum() -> None:
+    repository = FakeEventRepository()
+    repository.create(
+        Event(
+            id="event-1",
+            slug="battle-of-yavin",
+            title="Battle of Yavin",
+            description=None,
+            start_year=0,
+            end_year=0,
+            era=None,
+            canon_status=None,
+        )
+    )
+    service = EventService(repository)
+
+    with pytest.raises(ValidationError):
+        service.list_dependencies("event-1", depth=9)
+
+
 def test_get_causal_graph_passes_depth_to_repository() -> None:
     repository = FakeEventRepository()
     repository.create(

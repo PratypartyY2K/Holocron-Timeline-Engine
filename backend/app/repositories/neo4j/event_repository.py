@@ -205,8 +205,8 @@ class Neo4jEventRepository(Neo4jRepositoryBase, EventRepository):
 
         def operation() -> tuple[list[Any], Any]:
             with self._driver.session(database=self._database) as session:
-                event_records = list(session.run(query, **params))
-                count_record = session.run(count_query, **params).single()
+                event_records = list(session.run(self._query(query), **params))
+                count_record = session.run(self._query(count_query), **params).single()
                 return event_records, count_record
 
         event_records, count_record = self._measure_query("event.list", operation)
@@ -380,7 +380,11 @@ class Neo4jEventRepository(Neo4jRepositoryBase, EventRepository):
 
         def operation() -> tuple[list[dict[str, Any]], list[Event]]:
             with self._driver.session(database=self._database) as session:
-                edge_record = session.run(edge_query, event_id=event_id, depth=depth).single()
+                edge_record = session.run(
+                    self._query(edge_query),
+                    event_id=event_id,
+                    depth=depth,
+                ).single()
                 raw_edges = [] if edge_record is None else list(edge_record["edges"])
 
                 node_ids = {event_id}
@@ -388,7 +392,7 @@ class Neo4jEventRepository(Neo4jRepositoryBase, EventRepository):
                     node_ids.add(edge["source_id"])
                     node_ids.add(edge["target_id"])
 
-                node_result = session.run(node_query, node_ids=list(node_ids))
+                node_result = session.run(self._query(node_query), node_ids=list(node_ids))
                 nodes = [map_event_record(dict(record["event"])) for record in node_result]
                 return raw_edges, nodes
 
@@ -473,7 +477,7 @@ class Neo4jEventRepository(Neo4jRepositoryBase, EventRepository):
 
         def operation() -> tuple[list[dict[str, Any]], list[Event]]:
             with self._driver.session(database=self._database) as session:
-                edge_record = session.run(edge_query, event_id=event_id).single()
+                edge_record = session.run(self._query(edge_query), event_id=event_id).single()
                 raw_edges = [] if edge_record is None else list(edge_record["edges"])
 
                 impacted_node_ids: set[str] = set()
@@ -483,7 +487,10 @@ class Neo4jEventRepository(Neo4jRepositoryBase, EventRepository):
                     if edge["target_id"] != event_id:
                         impacted_node_ids.add(edge["target_id"])
 
-                node_result = session.run(node_query, node_ids=list(impacted_node_ids))
+                node_result = session.run(
+                    self._query(node_query),
+                    node_ids=list(impacted_node_ids),
+                )
                 impacted_events = [
                     map_event_record(dict(record["event"])) for record in node_result
                 ]
@@ -539,7 +546,8 @@ class Neo4jEventRepository(Neo4jRepositoryBase, EventRepository):
         def operation() -> tuple[list[Event], list[CausalGraphEdge], dict[str, list[str]]]:
             with self._driver.session(database=self._database) as session:
                 downstream_ids_record = session.run(
-                    downstream_ids_query, event_id=event_id
+                    self._query(downstream_ids_query),
+                    event_id=event_id,
                 ).single()
                 downstream_ids = (
                     []
@@ -548,9 +556,15 @@ class Neo4jEventRepository(Neo4jRepositoryBase, EventRepository):
                 )
                 simulation_ids = [event_id, *downstream_ids]
 
-                node_result = session.run(node_query, node_ids=simulation_ids)
-                edge_result = session.run(edge_query, simulation_ids=simulation_ids)
-                dependency_result = session.run(dependency_query, downstream_ids=downstream_ids)
+                node_result = session.run(self._query(node_query), node_ids=simulation_ids)
+                edge_result = session.run(
+                    self._query(edge_query),
+                    simulation_ids=simulation_ids,
+                )
+                dependency_result = session.run(
+                    self._query(dependency_query),
+                    downstream_ids=downstream_ids,
+                )
 
                 downstream_events = [
                     map_event_record(dict(record["event"])) for record in node_result
@@ -619,7 +633,7 @@ class Neo4jEventRepository(Neo4jRepositoryBase, EventRepository):
     @staticmethod
     def _causes_path_pattern(depth: int | None) -> str:
         if depth is None:
-            return "*1.."
+            return "*1..8"
         return f"*1..{depth}"
 
     @staticmethod

@@ -280,7 +280,7 @@ Returns upstream causal dependencies for an event.
 
 Query parameters:
 
-- `depth` optional integer, minimum `1`
+- `depth` optional integer, range `1..8`
 
 ### `GET /events/{event_id}/consequences`
 
@@ -288,7 +288,7 @@ Returns downstream causal consequences for an event.
 
 Query parameters:
 
-- `depth` optional integer, minimum `1`
+- `depth` optional integer, range `1..8`
 
 ### `GET /events/{event_id}/causal-graph`
 
@@ -408,4 +408,5 @@ This means structural checks for new relationship writes happen in the applicati
 
 - All routes are mounted under `/api/v1`.
 - The source of truth for request and response shapes is the FastAPI schema exposed at `/docs`.
+- Traversal-heavy endpoints cap public depth arguments at `8`, and Neo4j reads are executed with an application-configured query timeout.
 - Validation errors, missing entities, duplicate edges, unsupported relationships, and chronology violations are surfaced by the backend as HTTP errors through the API error handlers.

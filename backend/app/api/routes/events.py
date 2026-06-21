@@ -89,7 +89,7 @@ def list_events(
 @router.get("/{event_id}/dependencies", response_model=list[EventResponse])
 def list_dependencies(
     event_id: str,
-    depth: int | None = Query(default=None, ge=1),
+    depth: int | None = Query(default=None, ge=1, le=8),
     service: EventService = Depends(get_event_service),
 ) -> list[EventResponse]:
     return [
@@ -101,7 +101,7 @@ def list_dependencies(
 @router.get("/{event_id}/consequences", response_model=list[EventResponse])
 def list_consequences(
     event_id: str,
-    depth: int | None = Query(default=None, ge=1),
+    depth: int | None = Query(default=None, ge=1, le=8),
     service: EventService = Depends(get_event_service),
 ) -> list[EventResponse]:
     return [
