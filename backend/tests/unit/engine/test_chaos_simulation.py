@@ -14,7 +14,6 @@ from app.domain.enums import RelationshipType
 from app.engine.services.timeline_simulation_service import TimelineSimulationService
 from tests.unit.engine.fakes import FakeEventRepository
 
-
 EVENT_COUNT = 500
 GRAPH_SEED = 4517
 BREAK_SELECTION_SEED = 9001
