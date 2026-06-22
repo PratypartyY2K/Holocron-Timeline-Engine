@@ -3,6 +3,7 @@
 import type { Route } from "next";
 import Link from "next/link";
 import { useEffect, useState, type FormEvent } from "react";
+import { ArchiveSearchNav } from "./archive-search-nav";
 import { EventFocusGraph } from "./event-focus-graph";
 import {
   type EventRecord,
@@ -198,6 +199,7 @@ export function EventDetailPageClient({ depth, slug }: EventDetailPageClientProp
 
         <h1>{data.event.title}</h1>
         <p className="detail-description">{data.event.description ?? "No description available."}</p>
+        <ArchiveSearchNav />
 
         <div className="hero-stats detail-stats">
           <div className="stat-card">

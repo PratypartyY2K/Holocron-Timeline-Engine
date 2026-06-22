@@ -2,6 +2,7 @@
 
 import type { Route } from "next";
 import Link from "next/link";
+import { ArchiveSearchNav } from "./archive-search-nav";
 import {
   formatEventRange,
   getCharacterBySlug,
@@ -54,6 +55,7 @@ export function CharactersPageClient() {
           Browse named individuals and their node profiles, then pivot into event history
           through character-aware timeline filters.
         </p>
+        <ArchiveSearchNav />
       </section>
 
       <section className="timeline-shell entity-shell">
@@ -138,6 +140,7 @@ export function CharacterDetailPageClient({ slug }: EntitySlugProps) {
 
         <h1>{data.character.name}</h1>
         <p className="detail-description">{data.character.description ?? "No description available."}</p>
+        <ArchiveSearchNav />
 
         <div className="hero-stats detail-stats">
           <div className="stat-card">
@@ -230,6 +233,7 @@ export function PlanetsPageClient() {
           Browse worlds across the galaxy, inspect their profile metadata, and pivot into
           timeline events anchored to each location.
         </p>
+        <ArchiveSearchNav />
       </section>
 
       <section className="timeline-shell entity-shell">
@@ -300,6 +304,7 @@ export function PlanetDetailPageClient({ slug }: EntitySlugProps) {
 
         <h1>{data.name}</h1>
         <p className="detail-description">{data.description ?? "No description available."}</p>
+        <ArchiveSearchNav />
 
         <div className="hero-stats detail-stats">
           <div className="stat-card">
@@ -368,6 +373,7 @@ export function FactionsPageClient() {
           Browse the major blocs in the graph and inspect the organizations shaping the
           galaxy-wide chronology.
         </p>
+        <ArchiveSearchNav />
       </section>
 
       <section className="timeline-shell entity-shell">
@@ -438,6 +444,7 @@ export function FactionDetailPageClient({ slug }: EntitySlugProps) {
 
         <h1>{data.name}</h1>
         <p className="detail-description">{data.description ?? "No description available."}</p>
+        <ArchiveSearchNav />
 
         <div className="hero-stats detail-stats">
           <div className="stat-card">

@@ -4,6 +4,7 @@ import type { Route } from "next";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, type FormEvent } from "react";
+import { ArchiveSearchNav } from "./archive-search-nav";
 import {
   type CharacterRecord,
   type FactionRecord,
@@ -401,39 +402,7 @@ export function HomePageClient({
               ? "An events-first Star Wars explorer with chronology filters and direct access to each event detail page."
               : "A timeline-first Star Wars explorer with event chronology, graph-aware filters, and browsable entity records for the major actors in the canon."}
           </p>
-          <form className="search-bar" method="get">
-            <label className="search-field">
-              <span className="search-label">Archive search</span>
-              <input
-                type="search"
-                name="q"
-                defaultValue={searchQuery ?? ""}
-                placeholder="Search for Anakin, Order 66, Coruscant..."
-              />
-            </label>
-            <button type="submit" className="action-button">
-              Search archive
-            </button>
-            {searchQuery ? (
-              <Link href={"/" as Route} className="secondary-link">
-                Clear search
-              </Link>
-            ) : null}
-          </form>
-          <nav className="hero-nav" aria-label="Primary">
-            <Link href={"/events" as Route} className="secondary-link">
-              Events
-            </Link>
-            <Link href={"/characters" as Route} className="secondary-link">
-              Characters
-            </Link>
-            <Link href={"/planets" as Route} className="secondary-link">
-              Planets
-            </Link>
-            <Link href={"/factions" as Route} className="secondary-link">
-              Factions
-            </Link>
-          </nav>
+          <ArchiveSearchNav defaultQuery={searchQuery ?? ""} />
         </div>
 
         <div className="hero-stats">
