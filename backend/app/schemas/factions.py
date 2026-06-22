@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
+
 from app.schemas.characters import CharacterResponse
 from app.schemas.events import EventResponse
 
