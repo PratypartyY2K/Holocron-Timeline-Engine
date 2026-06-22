@@ -1028,8 +1028,11 @@ body {
 }
 
 .graph-canvas .react-flow__minimap {
+  top: 1rem;
+  right: 1rem;
   background: rgba(7, 12, 20, 0.88);
   border: 1px solid rgba(233, 180, 76, 0.12);
+  border-radius: 12px;
 }
 
 .graph-canvas .react-flow__controls {

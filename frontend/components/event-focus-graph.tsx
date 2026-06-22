@@ -80,6 +80,7 @@ const NODE_ORIGIN: [number, number] = [0, 0];
 
 const NODE_WIDTH = 240;
 const NODE_MIN_HEIGHT = 136;
+const NODE_VERTICAL_GAP = 48;
 const CHRONOLOGY_COLUMN_GAP = 320;
 const LAYOUT_MARGIN_X = 80;
 const LAYOUT_MARGIN_Y = 60;
@@ -560,6 +561,29 @@ function buildGraph(
     };
   });
 
+  const nodesByColumn = new Map<number, Node<GraphNodeData>[]>();
+  for (const node of nodes) {
+    const event = eventById.get(node.id);
+    const chronologyColumn = event ? (chronologyColumnByYear.get(event.start_year) ?? 0) : 0;
+    const columnNodes = nodesByColumn.get(chronologyColumn) ?? [];
+    columnNodes.push(node);
+    nodesByColumn.set(chronologyColumn, columnNodes);
+  }
+
+  for (const columnNodes of nodesByColumn.values()) {
+    columnNodes.sort((left, right) => left.position.y - right.position.y);
+
+    let previousBottom = Number.NEGATIVE_INFINITY;
+    for (const node of columnNodes) {
+      const nodeHeight = typeof node.height === "number" ? node.height : NODE_MIN_HEIGHT;
+      const minY = previousBottom + NODE_VERTICAL_GAP;
+      if (node.position.y < minY) {
+        node.position.y = minY;
+      }
+      previousBottom = node.position.y + nodeHeight;
+    }
+  }
+
   const edges: Edge[] = source.edges.map((edge) => {
     const targetNode = eventById.get(edge.target_id);
     const edgeOnPath = pathSelection.edges.has(edge.id);
@@ -891,7 +915,9 @@ export function EventFocusGraph({
         >
           <MiniMap
             pannable
+            position="top-right"
             zoomable
+            style={{ width: 140, height: 88 }}
             nodeColor={miniMapNodeColor}
             maskColor="rgba(5, 11, 18, 0.6)"
           />
