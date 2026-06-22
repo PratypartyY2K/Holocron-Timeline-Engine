@@ -16,53 +16,19 @@ Request flow:
 
 ## Architecture Diagrams
 
-```mermaid
-graph TD
-    NextJS["Next.js Frontend"] -->|REST API| FastAPI["FastAPI API Layer"]
-    FastAPI -->|Business Logic| Engine["Engine Services"]
-    Engine -->|Cypher Queries| Neo4j["Neo4j Graph DB"]
-    RawData["data/raw + scripts/transform.py"] -->|Compiled Dataset| Ingestion["Ingestion Pipeline"]
-    Ingestion -->|Validated Writes| FastAPI
-```
+![Production request and ingestion lifecycle](./production-request-ingestion-lifecycle.svg)
 
-### HLD
+The production architecture separates two concerns:
 
-```text
-+-------------------+       +-------------------+       +-------------------+
-| Next.js Frontend  | ----> | FastAPI API Layer | ----> | Engine Services   |
-+-------------------+       +-------------------+       +-------------------+
-                                                              |
-                                                              v
-                                                     +-------------------+
-                                                     | Neo4j Repositories|
-                                                     +-------------------+
-                                                              |
-                                                              v
-                                                     +-------------------+
-                                                     | Neo4j Graph Store |
-                                                     +-------------------+
-```
+- stateless request serving from Next.js through FastAPI into request-scoped Neo4j reads
+- isolated ingestion and backfill pipelines that validate writes before committing into the same graph store
 
-### LLD
+### Runtime Layers
 
-```text
-frontend/app + components
-        |
-        v
-backend/app/api/routes
-        |
-        v
-backend/app/engine/services
-        |
-        v
-backend/app/repositories/interfaces
-        |
-        v
-backend/app/repositories/neo4j
-        |
-        v
-backend/app/domain + backend/app/schemas
-```
+- `frontend/` issues browser-side REST fetches and renders timeline, graph, and simulation views
+- `backend/app/api/` and `backend/app/engine/` remain stateless with respect to graph topology and assemble subgraphs per request
+- `backend/app/repositories/neo4j/` translates read and write operations into Cypher against Neo4j
+- `scripts/`, `backend/app/ingestion/`, and backfill CLIs handle dataset compilation, audits, and idempotent write workflows outside the request path
 
 ## Core Model
 

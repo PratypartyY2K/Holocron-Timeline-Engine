@@ -78,6 +78,10 @@ Request flow:
 
 `Next.js UI -> FastAPI routes -> engine services -> repository interfaces -> Neo4j`
 
+Production request and ingestion lifecycle:
+
+![Production request and ingestion lifecycle](docs/production-request-ingestion-lifecycle.svg)
+
 ## Docs
 
 - [Architecture](docs/architecture.md)
@@ -86,7 +90,7 @@ Request flow:
 
 ### Documentation
 
-- Architecture diagrams: HLD and LLD views in [docs/architecture.md](docs/architecture.md)
+- Architecture diagrams: production request and ingestion lifecycle view in [docs/architecture.md](docs/architecture.md)
 - Data model overview and relationship model in [docs/architecture.md](docs/architecture.md)
 - System mechanics such as chronology normalization in [docs/architecture.md](docs/architecture.md)
 - Example API and graph queries in [docs/api.md](docs/api.md) and [docs/architecture.md](docs/architecture.md)
