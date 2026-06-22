@@ -266,6 +266,14 @@ export function HomePageClient({
   const character = parseText(initialSearchParams.character);
   const location = parseText(initialSearchParams.location);
   const searchQuery = parseText(initialSearchParams.q);
+  const hasArchiveFilters =
+    Boolean(searchQuery) ||
+    startYear !== undefined ||
+    endYear !== undefined ||
+    Boolean(era) ||
+    Boolean(character) ||
+    Boolean(location) ||
+    order === "desc";
 
   function handleTimelineFilterSubmit(event: FormEvent<HTMLFormElement>): void {
     event.preventDefault();
@@ -589,7 +597,7 @@ export function HomePageClient({
             </div>
           </section>
 
-          {!eventsOnly
+          {!eventsOnly && !hasArchiveFilters
             ? renderEntityPreview(
                 "Character archive",
                 "Personae",
@@ -597,7 +605,7 @@ export function HomePageClient({
                 data.characters.slice(0, 6),
               )
             : null}
-          {!eventsOnly
+          {!eventsOnly && !hasArchiveFilters
             ? renderEntityPreview(
                 "Planetary atlas",
                 "Atlas",
@@ -605,7 +613,7 @@ export function HomePageClient({
                 data.planets.slice(0, 6),
               )
             : null}
-          {!eventsOnly
+          {!eventsOnly && !hasArchiveFilters
             ? renderEntityPreview(
                 "Faction registry",
                 "Power blocs",
