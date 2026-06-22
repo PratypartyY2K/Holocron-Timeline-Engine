@@ -70,6 +70,8 @@ export function EventDetailPageClient({ depth, slug }: EventDetailPageClientProp
   const [isWhatIfEnabled, setIsWhatIfEnabled] = useState(false);
   const [dependencyDepth, setDependencyDepth] = useState(depth);
   const [dependencyDepthDraft, setDependencyDepthDraft] = useState(String(depth));
+  const [consequenceDepth, setConsequenceDepth] = useState(depth);
+  const [consequenceDepthDraft, setConsequenceDepthDraft] = useState(String(depth));
   const { data, error, isLoading } = useAsyncData<EventDetailData>(
     async () => {
       const event = await getEventBySlug(slug);
@@ -103,6 +105,19 @@ export function EventDetailPageClient({ depth, slug }: EventDetailPageClientProp
     },
     [data?.event.id, dependencyDepth],
   );
+  const {
+    data: consequenceItems,
+    error: consequenceError,
+    isLoading: isConsequenceLoading,
+  } = useAsyncData<EventRecord[] | null>(
+    async () => {
+      if (!data?.event.id) {
+        return null;
+      }
+      return getEventConsequences(data.event.id, consequenceDepth);
+    },
+    [consequenceDepth, data?.event.id],
+  );
   const impactEventId = isWhatIfEnabled ? data?.event.id ?? null : null;
   const {
     data: simulationData,
@@ -128,6 +143,8 @@ export function EventDetailPageClient({ depth, slug }: EventDetailPageClientProp
   useEffect(() => {
     setDependencyDepth(depth);
     setDependencyDepthDraft(String(depth));
+    setConsequenceDepth(depth);
+    setConsequenceDepthDraft(String(depth));
   }, [depth, slug]);
 
   function handleDependencyDepthSubmit(event: FormEvent<HTMLFormElement>): void {
@@ -135,6 +152,14 @@ export function EventDetailPageClient({ depth, slug }: EventDetailPageClientProp
     const nextDepth = Number.parseInt(dependencyDepthDraft, 10);
     if (!Number.isNaN(nextDepth) && nextDepth >= 1 && nextDepth <= 5) {
       setDependencyDepth(nextDepth);
+    }
+  }
+
+  function handleConsequenceDepthSubmit(event: FormEvent<HTMLFormElement>): void {
+    event.preventDefault();
+    const nextDepth = Number.parseInt(consequenceDepthDraft, 10);
+    if (!Number.isNaN(nextDepth) && nextDepth >= 1 && nextDepth <= 5) {
+      setConsequenceDepth(nextDepth);
     }
   }
 
@@ -386,10 +411,38 @@ export function EventDetailPageClient({ depth, slug }: EventDetailPageClientProp
               <h2>Events that follow from this</h2>
             </div>
             <p className="timeline-caption">
-              Showing browser-fetched downstream effects from <code>/consequences?depth={depth}</code>.
+              Showing browser-fetched downstream effects from <code>/consequences?depth={consequenceDepth}</code>.
             </p>
           </header>
-          {renderEventList(data.consequences, `No downstream consequences found within depth ${depth}.`)}
+          <form className="detail-toolbar" method="get" onSubmit={handleConsequenceDepthSubmit}>
+            <label className="filter-field">
+              <span>Traversal depth</span>
+              <select
+                name="depth"
+                value={consequenceDepthDraft}
+                onChange={(event) => setConsequenceDepthDraft(event.target.value)}
+              >
+                <option value="1">1 hop</option>
+                <option value="2">2 hops</option>
+                <option value="3">3 hops</option>
+                <option value="4">4 hops</option>
+                <option value="5">5 hops</option>
+              </select>
+            </label>
+            <div className="filter-actions">
+              <button type="submit" className="action-button">
+                Apply depth
+              </button>
+            </div>
+          </form>
+          {isConsequenceLoading ? (
+            <p className="detail-empty">Updating consequences…</p>
+          ) : consequenceError ? (
+            <p className="detail-empty">{consequenceError}</p>
+          ) : renderEventList(
+              consequenceItems ?? data.consequences,
+              `No downstream consequences found within depth ${consequenceDepth}.`,
+            )}
         </section>
       </section>
     </main>
