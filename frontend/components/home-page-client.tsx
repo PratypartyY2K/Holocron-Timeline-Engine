@@ -63,7 +63,9 @@ function parseText(value: string | string[] | undefined): string | undefined {
   return value;
 }
 
-function entityMetaLabel(entity: CharacterRecord | PlanetRecord | FactionRecord): string {
+function entityMetaLabel(
+  entity: CharacterRecord | PlanetRecord | FactionRecord,
+): string {
   if ("species" in entity) {
     return entity.species ?? entity.homeworld_name ?? "Character profile";
   }
@@ -110,8 +112,14 @@ function buildTimelineGroups(
   const groups = new Map<string, TimelineGroup>();
 
   for (const event of items) {
-    const key = zoomLevel === "year" ? String(event.start_year) : `decade:${decadeStart(event.start_year)}`;
-    const label = zoomLevel === "year" ? formatChronology(event.start_year) : decadeLabel(event.start_year);
+    const key =
+      zoomLevel === "year"
+        ? String(event.start_year)
+        : `decade:${decadeStart(event.start_year)}`;
+    const label =
+      zoomLevel === "year"
+        ? formatChronology(event.start_year)
+        : decadeLabel(event.start_year);
     const summary = zoomLevel === "year" ? "Year view" : "Decade view";
     const current = groups.get(key) ?? {
       events: [],
@@ -127,7 +135,10 @@ function buildTimelineGroups(
 }
 
 function renderSearchResults(query: string, items: SearchResultRecord[]) {
-  const groupedResults = new Map<SearchResultRecord["entity_type"], SearchResultRecord[]>();
+  const groupedResults = new Map<
+    SearchResultRecord["entity_type"],
+    SearchResultRecord[]
+  >();
   for (const item of items) {
     const bucket = groupedResults.get(item.entity_type) ?? [];
     bucket.push(item);
@@ -149,8 +160,8 @@ function renderSearchResults(query: string, items: SearchResultRecord[]) {
           <h2>{searchSectionTitle(query, items.length)}</h2>
         </div>
         <p className="timeline-caption">
-          Browser-fetched from <code>/api/v1/search?q={query}</code> across events, characters,
-          planets, and factions.
+          Browser-fetched from <code>/api/v1/search?q={query}</code> across
+          events, characters, planets, and factions.
         </p>
       </header>
       {items.length === 0 ? (
@@ -172,7 +183,11 @@ function renderSearchResults(query: string, items: SearchResultRecord[]) {
                 </div>
                 <div className="search-grid">
                   {groupItems.map((item) => (
-                    <Link key={`${item.entity_type}-${item.id}`} href={searchResultHref(item)} className="search-card">
+                    <Link
+                      key={`${item.entity_type}-${item.id}`}
+                      href={searchResultHref(item)}
+                      className="search-card"
+                    >
                       <div className="search-card-meta">
                         <span>{item.entity_type}</span>
                         <span>/{item.slug}</span>
@@ -239,7 +254,8 @@ export function HomePageClient({
   landingOnly = false,
 }: HomePageClientProps) {
   const router = useRouter();
-  const [timelineZoomLevel, setTimelineZoomLevel] = useState<TimelineZoomLevel>("year");
+  const [timelineZoomLevel, setTimelineZoomLevel] =
+    useState<TimelineZoomLevel>("year");
   const startYear = parseChronologyInput(initialSearchParams.start_year);
   const endYear = parseChronologyInput(initialSearchParams.end_year);
   const startYearInput = formatChronologyInput(initialSearchParams.start_year);
@@ -271,7 +287,11 @@ export function HomePageClient({
     if (typeof endYearValue === "string" && endYearValue.trim() !== "") {
       params.set("end_year", endYearValue.trim());
     }
-    if (typeof orderValue === "string" && orderValue.trim() !== "" && orderValue !== "asc") {
+    if (
+      typeof orderValue === "string" &&
+      orderValue.trim() !== "" &&
+      orderValue !== "asc"
+    ) {
       params.set("order", orderValue);
     }
     if (typeof eraValue === "string" && eraValue.trim() !== "") {
@@ -288,36 +308,40 @@ export function HomePageClient({
     router.push((query ? `/?${query}` : "/") as Route);
   }
 
-  const { data, error, isLoading } = useAsyncData<HomePageData>(
-    async () => {
-      const [backendStatus, timeline, characters, planets, factions, searchResults] = await Promise.all([
-        getBackendStatus(),
-        getTimelineEvents({
-          startYear,
-          endYear,
-          era,
-          character,
-          location,
-          order,
-          limit: 200,
-        }),
-        getCharacters(),
-        getPlanets(),
-        getFactions(),
-        searchQuery ? searchEntities(searchQuery, 12) : Promise.resolve([]),
-      ]);
+  const { data, error, isLoading } = useAsyncData<HomePageData>(async () => {
+    const [
+      backendStatus,
+      timeline,
+      characters,
+      planets,
+      factions,
+      searchResults,
+    ] = await Promise.all([
+      getBackendStatus(),
+      getTimelineEvents({
+        startYear,
+        endYear,
+        era,
+        character,
+        location,
+        order,
+        limit: 200,
+      }),
+      getCharacters(),
+      getPlanets(),
+      getFactions(),
+      searchQuery ? searchEntities(searchQuery, 12) : Promise.resolve([]),
+    ]);
 
-      return {
-        backendStatus,
-        characters,
-        factions,
-        planets,
-        searchResults,
-        timeline,
-      };
-    },
-    [startYear, endYear, order, era, character, location, searchQuery],
-  );
+    return {
+      backendStatus,
+      characters,
+      factions,
+      planets,
+      searchResults,
+      timeline,
+    };
+  }, [startYear, endYear, order, era, character, location, searchQuery]);
 
   const knownEras = useMemo(
     () =>
@@ -415,7 +439,9 @@ export function HomePageClient({
         <div className="hero-stats">
           <div className="stat-card">
             <span className="stat-label">Backend</span>
-            <span className={`status-pill status-${data.backendStatus}`}>{data.backendStatus}</span>
+            <span className={`status-pill status-${data.backendStatus}`}>
+              {data.backendStatus}
+            </span>
           </div>
           <div className="stat-card">
             <span className="stat-label">Event range</span>
@@ -431,153 +457,193 @@ export function HomePageClient({
           </div>
           <div className="stat-card">
             <span className="stat-label">Coverage</span>
-            <strong>{buildEraSummary(data.timeline.items.map((event) => event.era))}</strong>
+            <strong>
+              {buildEraSummary(data.timeline.items.map((event) => event.era))}
+            </strong>
           </div>
         </div>
       </section>
 
       {landingOnly ? null : (
         <>
-      {searchQuery ? renderSearchResults(searchQuery, data.searchResults) : null}
+          {searchQuery
+            ? renderSearchResults(searchQuery, data.searchResults)
+            : null}
 
-      <section className="timeline-shell">
-        <header className="timeline-header">
-          <div>
-            <p className="section-kicker">Chronology</p>
-            <h2>Mapped events</h2>
-          </div>
-          <p className="timeline-caption">
-            Browser-fetched from <code>/api/v1/events</code>. Filters now span time, era,
-            character involvement, and location.
-          </p>
-        </header>
-
-        <div className="timeline-zoom-bar" role="tablist" aria-label="Timeline zoom">
-          <button
-            type="button"
-            className={`timeline-zoom-button${timelineZoomLevel === "year" ? " is-active" : ""}`}
-            onClick={() => setTimelineZoomLevel("year")}
-          >
-            Year view
-          </button>
-          <button
-            type="button"
-            className={`timeline-zoom-button${timelineZoomLevel === "decade" ? " is-active" : ""}`}
-            onClick={() => setTimelineZoomLevel("decade")}
-          >
-            Decade view
-          </button>
-        </div>
-
-        <form
-          className="filter-bar filter-bar-wide"
-          method="get"
-          onSubmit={handleTimelineFilterSubmit}
-        >
-          <label className="filter-field">
-            <span>Start chronology</span>
-            <input
-              type="text"
-              name="start_year"
-              defaultValue={startYearInput}
-              placeholder="32 BBY"
-            />
-          </label>
-          <label className="filter-field">
-            <span>End chronology</span>
-            <input
-              type="text"
-              name="end_year"
-              defaultValue={endYearInput}
-              placeholder="4 ABY"
-            />
-          </label>
-          <label className="filter-field">
-            <span>Order</span>
-            <select name="order" defaultValue={order}>
-              <option value="asc">Ascending</option>
-              <option value="desc">Descending</option>
-            </select>
-          </label>
-          <label className="filter-field">
-            <span>Era</span>
-            <select name="era" defaultValue={era ?? ""}>
-              <option value="">All eras</option>
-              {knownEras.map((knownEra) => (
-                <option key={knownEra} value={knownEra}>
-                  {knownEra}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="filter-field">
-            <span>Character</span>
-            <select name="character" defaultValue={character ?? ""}>
-              <option value="">Any character</option>
-              {data.characters.map((item) => (
-                <option key={item.id} value={item.slug}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="filter-field">
-            <span>Location</span>
-            <select name="location" defaultValue={location ?? ""}>
-              <option value="">Any planet</option>
-              {data.planets.map((item) => (
-                <option key={item.id} value={item.slug}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="filter-actions">
-            <button type="submit" className="action-button">
-              Apply filters
-            </button>
-            <Link href={"/" as Route} className="secondary-link">
-              Reset
-            </Link>
-          </div>
-        </form>
-
-        <div className="timeline-groups">
-          {timelineGroups.map((group) => (
-            <section key={group.id} className="timeline-group">
-              <header className="timeline-group-header">
-                <div>
-                  <p className="section-kicker">{group.summary}</p>
-                  <h3>{group.label}</h3>
-                </div>
-                <span className="timeline-group-count">{group.events.length} events</span>
-              </header>
-              <div className="timeline-list">
-                {group.events.map((event) => (
-                  <article key={event.id} className="timeline-card">
-                    <div className="timeline-marker" aria-hidden="true" />
-                    <Link
-                      href={`/events/${event.slug}` as Route}
-                      className="timeline-card-body timeline-link-card"
-                    >
-                      <div className="timeline-meta">
-                        <span className="timeline-year">{formatEventRange(event.start_year, event.end_year)}</span>
-                        <span className="timeline-era">{event.era ?? "Unclassified era"}</span>
-                      </div>
-                      <h3>{event.title}</h3>
-                      <p>{event.description ?? "No description available."}</p>
-                    </Link>
-                  </article>
-                ))}
+          <section className="timeline-shell">
+            <header className="timeline-header">
+              <div>
+                <p className="section-kicker">Chronology</p>
+                <h2>Events</h2>
               </div>
-            </section>
-          ))}
-        </div>
-      </section>
+              <p className="timeline-caption">
+                Browser-fetched from <code>/api/v1/events</code>. Filters now
+                span time, era, character involvement, and location.
+              </p>
+            </header>
 
-      {!eventsOnly ? renderEntityPreview("Character archive", "Personae", "/characters", data.characters.slice(0, 6)) : null}
-      {!eventsOnly ? renderEntityPreview("Planetary atlas", "Atlas", "/planets", data.planets.slice(0, 6)) : null}
-      {!eventsOnly ? renderEntityPreview("Faction registry", "Power blocs", "/factions", data.factions.slice(0, 6)) : null}
+            <div
+              className="timeline-zoom-bar"
+              role="tablist"
+              aria-label="Timeline zoom"
+            >
+              <button
+                type="button"
+                className={`timeline-zoom-button${timelineZoomLevel === "year" ? " is-active" : ""}`}
+                onClick={() => setTimelineZoomLevel("year")}
+              >
+                Year view
+              </button>
+              <button
+                type="button"
+                className={`timeline-zoom-button${timelineZoomLevel === "decade" ? " is-active" : ""}`}
+                onClick={() => setTimelineZoomLevel("decade")}
+              >
+                Decade view
+              </button>
+            </div>
+
+            <form
+              className="filter-bar filter-bar-wide"
+              method="get"
+              onSubmit={handleTimelineFilterSubmit}
+            >
+              <label className="filter-field">
+                <span>Start chronology</span>
+                <input
+                  type="text"
+                  name="start_year"
+                  defaultValue={startYearInput}
+                  placeholder="32 BBY"
+                />
+              </label>
+              <label className="filter-field">
+                <span>End chronology</span>
+                <input
+                  type="text"
+                  name="end_year"
+                  defaultValue={endYearInput}
+                  placeholder="4 ABY"
+                />
+              </label>
+              <label className="filter-field">
+                <span>Order</span>
+                <select name="order" defaultValue={order}>
+                  <option value="asc">Ascending</option>
+                  <option value="desc">Descending</option>
+                </select>
+              </label>
+              <label className="filter-field">
+                <span>Era</span>
+                <select name="era" defaultValue={era ?? ""}>
+                  <option value="">All eras</option>
+                  {knownEras.map((knownEra) => (
+                    <option key={knownEra} value={knownEra}>
+                      {knownEra}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="filter-field">
+                <span>Character</span>
+                <select name="character" defaultValue={character ?? ""}>
+                  <option value="">Any character</option>
+                  {data.characters.map((item) => (
+                    <option key={item.id} value={item.slug}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="filter-field">
+                <span>Location</span>
+                <select name="location" defaultValue={location ?? ""}>
+                  <option value="">Any planet</option>
+                  {data.planets.map((item) => (
+                    <option key={item.id} value={item.slug}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="filter-actions">
+                <button type="submit" className="action-button">
+                  Apply filters
+                </button>
+                <Link href={"/" as Route} className="secondary-link">
+                  Reset
+                </Link>
+              </div>
+            </form>
+
+            <div className="timeline-groups">
+              {timelineGroups.map((group) => (
+                <section key={group.id} className="timeline-group">
+                  <header className="timeline-group-header">
+                    <div>
+                      <p className="section-kicker">{group.summary}</p>
+                      <h3>{group.label}</h3>
+                    </div>
+                    <span className="timeline-group-count">
+                      {group.events.length} events
+                    </span>
+                  </header>
+                  <div className="timeline-list">
+                    {group.events.map((event) => (
+                      <article key={event.id} className="timeline-card">
+                        <div className="timeline-marker" aria-hidden="true" />
+                        <Link
+                          href={`/events/${event.slug}` as Route}
+                          className="timeline-card-body timeline-link-card"
+                        >
+                          <div className="timeline-meta">
+                            <span className="timeline-year">
+                              {formatEventRange(
+                                event.start_year,
+                                event.end_year,
+                              )}
+                            </span>
+                            <span className="timeline-era">
+                              {event.era ?? "Unclassified era"}
+                            </span>
+                          </div>
+                          <h3>{event.title}</h3>
+                          <p>
+                            {event.description ?? "No description available."}
+                          </p>
+                        </Link>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </div>
+          </section>
+
+          {!eventsOnly
+            ? renderEntityPreview(
+                "Character archive",
+                "Personae",
+                "/characters",
+                data.characters.slice(0, 6),
+              )
+            : null}
+          {!eventsOnly
+            ? renderEntityPreview(
+                "Planetary atlas",
+                "Atlas",
+                "/planets",
+                data.planets.slice(0, 6),
+              )
+            : null}
+          {!eventsOnly
+            ? renderEntityPreview(
+                "Faction registry",
+                "Power blocs",
+                "/factions",
+                data.factions.slice(0, 6),
+              )
+            : null}
         </>
       )}
     </main>
