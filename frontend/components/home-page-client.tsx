@@ -358,7 +358,9 @@ export function HomePageClient({ initialSearchParams }: HomePageClientProps) {
     <main className="page-shell">
       <section className="hero hero-wide">
         <div className="hero-copy">
-          <p className="eyebrow">Holocron Timeline Engine</p>
+          <Link href="http://localhost:3000" className="eyebrow">
+            Holocron Timeline Engine
+          </Link>
           <h1>Galaxy history, characters, worlds, and factions in one archive.</h1>
           <p className="lede">
             A timeline-first Star Wars explorer with event chronology, graph-aware filters,

@@ -51,7 +51,7 @@ body {
 }
 
 .eyebrow {
-  margin: 0 0 1rem;
+  margin: 0 0 1.4rem;
   text-transform: uppercase;
   letter-spacing: 0.18em;
   color: var(--accent);
