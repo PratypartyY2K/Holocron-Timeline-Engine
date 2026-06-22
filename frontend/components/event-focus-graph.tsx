@@ -79,7 +79,7 @@ const PRO_OPTIONS = Object.freeze({ hideAttribution: true });
 const NODE_ORIGIN: [number, number] = [0, 0];
 
 const NODE_WIDTH = 240;
-const NODE_HEIGHT = 136;
+const NODE_MIN_HEIGHT = 136;
 const CHRONOLOGY_COLUMN_GAP = 320;
 const LAYOUT_MARGIN_X = 80;
 const LAYOUT_MARGIN_Y = 60;
@@ -154,6 +154,40 @@ function buildSimulationLabel(
       ) : null}
     </div>
   );
+}
+
+function estimatedLineCount(value: string, charactersPerLine: number): number {
+  if (value.trim().length === 0) {
+    return 0;
+  }
+  return Math.max(1, Math.ceil(value.length / charactersPerLine));
+}
+
+function nodeHeightForEvent(
+  event: GraphSourceNode,
+  nodeById: Map<string, GraphSourceNode>,
+): number {
+  let lineCount = 0;
+
+  lineCount += 1;
+  lineCount += estimatedLineCount(event.title, 18);
+  lineCount += 1;
+
+  const factionLine = event.faction_names.length > 0 ? event.faction_names.join(", ") : "No faction tags";
+  lineCount += estimatedLineCount(factionLine, 24);
+
+  if ("status" in event) {
+    lineCount += 1;
+    if (event.affected_by_event_ids.length > 0) {
+      const affectedLine = `Depends on: ${event.affected_by_event_ids
+        .map((eventId) => nodeById.get(eventId)?.title)
+        .filter((title): title is string => Boolean(title))
+        .join(", ")}`;
+      lineCount += estimatedLineCount(affectedLine, 22);
+    }
+  }
+
+  return Math.max(NODE_MIN_HEIGHT, 28 + lineCount * 20);
 }
 
 function toVisualStatus(
@@ -448,6 +482,9 @@ function buildGraph(
     (left, right) => left - right,
   );
   const chronologyColumnByYear = new Map(chronologyYears.map((year, index) => [year, index]));
+  const nodeHeightById = new Map(
+    sortedEvents.map((event) => [event.id, nodeHeightForEvent(event, eventById)]),
+  );
 
   const dagreGraph = new dagre.graphlib.Graph();
   dagreGraph.setDefaultEdgeLabel(() => ({}));
@@ -464,7 +501,7 @@ function buildGraph(
   for (const event of sortedEvents) {
     dagreGraph.setNode(event.id, {
       width: NODE_WIDTH,
-      height: NODE_HEIGHT,
+      height: nodeHeightById.get(event.id) ?? NODE_MIN_HEIGHT,
     });
   }
 
@@ -481,6 +518,7 @@ function buildGraph(
     const tone = toneForNode(event.id, focusEventId, incoming, outgoing);
     const layoutNode = dagreGraph.node(event.id);
     const chronologyColumn = chronologyColumnByYear.get(event.start_year) ?? 0;
+    const nodeHeight = nodeHeightById.get(event.id) ?? NODE_MIN_HEIGHT;
     const accent = nodeAccent(event, colorMode);
     const isOnPath = pathSelection.nodes.has(event.id);
     const isAnchor = pathAnchorId === event.id;
@@ -493,14 +531,15 @@ function buildGraph(
       id: event.id,
       type: "default",
       width: NODE_WIDTH,
-      height: NODE_HEIGHT,
+      height: nodeHeight,
       position: {
         x: LAYOUT_MARGIN_X + chronologyColumn * CHRONOLOGY_COLUMN_GAP,
-        y: layoutNode.y - NODE_HEIGHT / 2,
+        y: layoutNode.y - nodeHeight / 2,
       },
       className: `graph-node-shell graph-node-shell-${status}`,
       style: {
         borderColor: accent,
+        minHeight: `${nodeHeight}px`,
         boxShadow: isAnchor
           ? `0 0 0 3px ${accent}55, 0 18px 45px rgba(0, 0, 0, 0.22)`
           : undefined,
