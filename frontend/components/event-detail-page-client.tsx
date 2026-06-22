@@ -370,7 +370,8 @@ export function EventDetailPageClient({ depth, slug }: EventDetailPageClientProp
               <h2>Events that lead here</h2>
             </div>
             <p className="timeline-caption">
-              Showing browser-fetched causal ancestors from <code>/dependencies?depth={dependencyDepth}</code>.
+              Showing browser-fetched causal ancestors at hop depth <code>{dependencyDepth}</code> from
+              <code> /dependencies?depth={dependencyDepth}</code>.
             </p>
           </header>
           <form className="detail-toolbar" method="get" onSubmit={handleDependencyDepthSubmit}>
@@ -400,7 +401,7 @@ export function EventDetailPageClient({ depth, slug }: EventDetailPageClientProp
             <p className="detail-empty">{dependencyError}</p>
           ) : renderEventList(
               dependencyItems ?? data.dependencies,
-              `No upstream dependencies found within depth ${dependencyDepth}.`,
+              `No upstream dependencies found at hop depth ${dependencyDepth}.`,
             )}
         </section>
 
@@ -411,7 +412,8 @@ export function EventDetailPageClient({ depth, slug }: EventDetailPageClientProp
               <h2>Events that follow from this</h2>
             </div>
             <p className="timeline-caption">
-              Showing browser-fetched downstream effects from <code>/consequences?depth={consequenceDepth}</code>.
+              Showing browser-fetched downstream effects at hop depth <code>{consequenceDepth}</code> from
+              <code> /consequences?depth={consequenceDepth}</code>.
             </p>
           </header>
           <form className="detail-toolbar" method="get" onSubmit={handleConsequenceDepthSubmit}>
@@ -441,7 +443,7 @@ export function EventDetailPageClient({ depth, slug }: EventDetailPageClientProp
             <p className="detail-empty">{consequenceError}</p>
           ) : renderEventList(
               consequenceItems ?? data.consequences,
-              `No downstream consequences found within depth ${consequenceDepth}.`,
+              `No downstream consequences found at hop depth ${consequenceDepth}.`,
             )}
         </section>
       </section>

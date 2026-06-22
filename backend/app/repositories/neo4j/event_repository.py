@@ -216,10 +216,9 @@ class Neo4jEventRepository(Neo4jRepositoryBase, EventRepository):
         return event_items, int(count_record["total"])
 
     def list_dependencies(self, event_id: str, depth: int | None = None) -> list[Event]:
-        relationship_pattern = self._causes_path_pattern(depth)
+        relationship_pattern = self._causes_path_pattern(depth, exact=depth is not None)
         query = f"""
         MATCH (source:Event)-[:CAUSES{relationship_pattern}]->(target:Event {{id: $event_id}})
-        WITH DISTINCT source
         CALL {{
             WITH source
             OPTIONAL MATCH (dependency:Event)-[:CAUSES*1..]->(source)
@@ -261,10 +260,9 @@ class Neo4jEventRepository(Neo4jRepositoryBase, EventRepository):
         return self._list_events(query, {"event_id": event_id})
 
     def list_consequences(self, event_id: str, depth: int | None = None) -> list[Event]:
-        relationship_pattern = self._causes_path_pattern(depth)
+        relationship_pattern = self._causes_path_pattern(depth, exact=depth is not None)
         query = f"""
         MATCH (source:Event {{id: $event_id}})-[:CAUSES{relationship_pattern}]->(target:Event)
-        WITH DISTINCT target
         CALL {{
             WITH target
             OPTIONAL MATCH (dependency:Event)-[:CAUSES*1..]->(target)
@@ -631,9 +629,11 @@ class Neo4jEventRepository(Neo4jRepositoryBase, EventRepository):
         return [map_event_record(dict(record["event"])) for record in result]
 
     @staticmethod
-    def _causes_path_pattern(depth: int | None) -> str:
+    def _causes_path_pattern(depth: int | None, *, exact: bool = False) -> str:
         if depth is None:
             return "*1..8"
+        if exact:
+            return f"*{depth}"
         return f"*1..{depth}"
 
     @staticmethod
