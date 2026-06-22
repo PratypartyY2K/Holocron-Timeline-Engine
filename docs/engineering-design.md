@@ -781,6 +781,10 @@ Response:
 
 - `list[EventSummaryResponse]`
 
+Notes:
+
+- the list endpoints interpret `depth` as an exact hop distance for dependency and consequence panels
+
 ### Pathfinding
 
 #### `GET /api/v1/events/path`
@@ -865,8 +869,10 @@ The frontend should be designed around stable API shapes rather than Neo4j-speci
 
 ### Primary Screens
 
+- landing page with archive search and section launchers
 - timeline explorer
 - event detail page
+- faction detail page
 - graph explorer page or panel
 - relationship creation flow
 
@@ -884,6 +890,13 @@ The frontend should be designed around stable API shapes rather than Neo4j-speci
 - upstream dependencies
 - downstream consequences
 - involved characters, factions, and locations
+
+#### Faction Detail
+
+- faction metadata
+- related characters inferred from faction-tagged events
+- enemy factions from `ENEMY_OF` relationships
+- involved events tagged through `INVOLVES`
 
 #### Graph Explorer
 

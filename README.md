@@ -36,15 +36,15 @@ For deeper performance and scaling discussion, see [docs/architecture.md](docs/a
 
 ## Demo Routes
 
-- `/` search-driven homepage and archive entry point
-- `/events` main timeline explorer
+- `/` landing page with archive search and section navigation
+- `/events` main timeline explorer and search results view
 - `/events/[slug]` event detail page with causal graph, impact, what-if simulation, and universe state
 - `/characters` character index
 - `/characters/[slug]` character detail page
 - `/planets` planet index
 - `/planets/[slug]` planet detail page
 - `/factions` faction index
-- `/factions/[slug]` faction detail page
+- `/factions/[slug]` faction detail page with related characters, enemy factions, and involved events
 
 Examples:
 
@@ -55,11 +55,12 @@ Examples:
 
 ## Example Use Case
 
-1. Open `/events`.
-2. Select `Battle of Yavin`.
-3. View its causal graph.
-4. Toggle `What If?`.
-5. Observe downstream events become invalidated or unresolved.
+1. Open `/`.
+2. Use the `Events` launcher or go directly to `/events`.
+3. Select `Battle of Yavin`.
+4. View its causal graph.
+5. Toggle `What If?`.
+6. Observe downstream events become invalidated or unresolved.
 
 This demonstrates how causal relationships propagate through the system when a key event is broken.
 

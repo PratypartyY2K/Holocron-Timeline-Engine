@@ -54,6 +54,7 @@ Interactive docs:
 - `POST /factions`
 - `GET /factions`
 - `GET /factions/by-slug/{slug}`
+- `GET /factions/by-slug/{slug}/detail`
 
 ## Health
 
@@ -368,6 +369,17 @@ Lists factions.
 ### `GET /factions/by-slug/{slug}`
 
 Fetches a faction by slug.
+
+### `GET /factions/by-slug/{slug}/detail`
+
+Fetches an aggregate faction detail payload for the faction detail page.
+
+Response shape:
+
+- `faction` base faction record
+- `characters` characters associated to the faction through faction-tagged events
+- `enemy_factions` factions connected through `ENEMY_OF`
+- `involved_events` events tagged to the faction through `INVOLVES`
 
 ## Graph
 
