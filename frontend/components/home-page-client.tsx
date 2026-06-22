@@ -25,6 +25,8 @@ import { useAsyncData } from "../lib/use-async-data";
 import { ErrorPageFeedback, LoadingPageFeedback } from "./page-feedback";
 
 type HomePageClientProps = {
+  eventsOnly?: boolean;
+  landingOnly?: boolean;
   initialSearchParams: Record<string, string | string[] | undefined>;
 };
 
@@ -231,7 +233,11 @@ function renderEntityPreview(
   );
 }
 
-export function HomePageClient({ initialSearchParams }: HomePageClientProps) {
+export function HomePageClient({
+  initialSearchParams,
+  eventsOnly = false,
+  landingOnly = false,
+}: HomePageClientProps) {
   const router = useRouter();
   const [timelineZoomLevel, setTimelineZoomLevel] = useState<TimelineZoomLevel>("year");
   const startYear = parseChronologyInput(initialSearchParams.start_year);
@@ -361,10 +367,15 @@ export function HomePageClient({ initialSearchParams }: HomePageClientProps) {
           <Link href="http://localhost:3000" className="eyebrow">
             Holocron Timeline Engine
           </Link>
-          <h1>Galaxy history, characters, worlds, and factions in one archive.</h1>
+          <h1>
+            {eventsOnly
+              ? "Galaxy history mapped as a focused event chronology."
+              : "Galaxy history, characters, worlds, and factions in one archive."}
+          </h1>
           <p className="lede">
-            A timeline-first Star Wars explorer with event chronology, graph-aware filters,
-            and browsable entity records for the major actors in the canon.
+            {eventsOnly
+              ? "An events-first Star Wars explorer with chronology filters and direct access to each event detail page."
+              : "A timeline-first Star Wars explorer with event chronology, graph-aware filters, and browsable entity records for the major actors in the canon."}
           </p>
           <form className="search-bar" method="get">
             <label className="search-field">
@@ -412,7 +423,11 @@ export function HomePageClient({ initialSearchParams }: HomePageClientProps) {
           </div>
           <div className="stat-card">
             <span className="stat-label">Entity coverage</span>
-            <strong>{data.characters.length + data.planets.length + data.factions.length} graph nodes</strong>
+            <strong>
+              {eventsOnly
+                ? `${data.timeline.total} events in current result set`
+                : `${data.characters.length + data.planets.length + data.factions.length} graph nodes`}
+            </strong>
           </div>
           <div className="stat-card">
             <span className="stat-label">Coverage</span>
@@ -421,6 +436,8 @@ export function HomePageClient({ initialSearchParams }: HomePageClientProps) {
         </div>
       </section>
 
+      {landingOnly ? null : (
+        <>
       {searchQuery ? renderSearchResults(searchQuery, data.searchResults) : null}
 
       <section className="timeline-shell">
@@ -558,9 +575,11 @@ export function HomePageClient({ initialSearchParams }: HomePageClientProps) {
         </div>
       </section>
 
-      {renderEntityPreview("Character archive", "Personae", "/characters", data.characters.slice(0, 6))}
-      {renderEntityPreview("Planetary atlas", "Atlas", "/planets", data.planets.slice(0, 6))}
-      {renderEntityPreview("Faction registry", "Power blocs", "/factions", data.factions.slice(0, 6))}
+      {!eventsOnly ? renderEntityPreview("Character archive", "Personae", "/characters", data.characters.slice(0, 6)) : null}
+      {!eventsOnly ? renderEntityPreview("Planetary atlas", "Atlas", "/planets", data.planets.slice(0, 6)) : null}
+      {!eventsOnly ? renderEntityPreview("Faction registry", "Power blocs", "/factions", data.factions.slice(0, 6)) : null}
+        </>
+      )}
     </main>
   );
 }

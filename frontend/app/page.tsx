@@ -6,5 +6,5 @@ type HomePageProps = {
 
 export default async function HomePage({ searchParams }: HomePageProps) {
   const resolvedSearchParams = searchParams ? await searchParams : {};
-  return <HomePageClient initialSearchParams={resolvedSearchParams} />;
+  return <HomePageClient initialSearchParams={resolvedSearchParams} landingOnly />;
 }
