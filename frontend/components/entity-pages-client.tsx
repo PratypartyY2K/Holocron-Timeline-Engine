@@ -4,11 +4,14 @@ import type { Route } from "next";
 import Link from "next/link";
 import { ArchiveSearchNav } from "./archive-search-nav";
 import {
+  type CharacterRecord,
+  type EventRecord,
+  type FactionDetailResponse,
   formatEventRange,
   getCharacterBySlug,
   getCharacterTimeline,
   getCharacters,
-  getFactionBySlug,
+  getFactionDetailBySlug,
   getFactions,
   getPlanetBySlug,
   getPlanets,
@@ -19,6 +22,81 @@ import { ErrorPageFeedback, LoadingPageFeedback } from "./page-feedback";
 type EntitySlugProps = {
   slug: string;
 };
+
+function renderRelatedCharacters(items: CharacterRecord[], emptyLabel: string) {
+  if (items.length === 0) {
+    return <p className="detail-empty">{emptyLabel}</p>;
+  }
+
+  return (
+    <div className="entity-grid">
+      {items.map((character) => (
+        <Link
+          key={character.id}
+          href={`/characters/${character.slug}` as Route}
+          className="entity-card"
+        >
+          <div className="entity-card-meta">
+            <span>{character.species ?? "Unknown species"}</span>
+            <span>{character.homeworld_name ?? "Unknown homeworld"}</span>
+          </div>
+          <h3>{character.name}</h3>
+          <p>{character.description ?? "No description available."}</p>
+        </Link>
+      ))}
+    </div>
+  );
+}
+
+function renderRelatedFactions(items: FactionDetailResponse["enemy_factions"], emptyLabel: string) {
+  if (items.length === 0) {
+    return <p className="detail-empty">{emptyLabel}</p>;
+  }
+
+  return (
+    <div className="entity-grid">
+      {items.map((faction) => (
+        <Link
+          key={faction.id}
+          href={`/factions/${faction.slug}` as Route}
+          className="entity-card"
+        >
+          <div className="entity-card-meta">
+            <span>Enemy faction</span>
+            <span>/{faction.slug}</span>
+          </div>
+          <h3>{faction.name}</h3>
+          <p>{faction.description ?? "No description available."}</p>
+        </Link>
+      ))}
+    </div>
+  );
+}
+
+function renderRelatedEvents(items: EventRecord[], emptyLabel: string) {
+  if (items.length === 0) {
+    return <p className="detail-empty">{emptyLabel}</p>;
+  }
+
+  return (
+    <div className="detail-list">
+      {items.map((event) => (
+        <Link
+          key={event.id}
+          href={`/events/${event.slug}` as Route}
+          className="detail-list-card"
+        >
+          <div className="detail-list-meta">
+            <span>{formatEventRange(event.start_year, event.end_year)}</span>
+            <span>{event.era ?? "Unclassified era"}</span>
+          </div>
+          <h3>{event.title}</h3>
+          <p>{event.description ?? "No description available."}</p>
+        </Link>
+      ))}
+    </div>
+  );
+}
 
 export function CharactersPageClient() {
   const { data, error, isLoading } = useAsyncData(getCharacters, []);
@@ -408,7 +486,7 @@ export function FactionsPageClient() {
 }
 
 export function FactionDetailPageClient({ slug }: EntitySlugProps) {
-  const { data, error, isLoading } = useAsyncData(() => getFactionBySlug(slug), [slug]);
+  const { data, error, isLoading } = useAsyncData(() => getFactionDetailBySlug(slug), [slug]);
 
   if (isLoading) {
     return (
@@ -439,11 +517,11 @@ export function FactionDetailPageClient({ slug }: EntitySlugProps) {
         </div>
 
         <div className="detail-meta">
-          <span className="detail-slug">/{data.slug}</span>
+          <span className="detail-slug">/{data.faction.slug}</span>
         </div>
 
-        <h1>{data.name}</h1>
-        <p className="detail-description">{data.description ?? "No description available."}</p>
+        <h1>{data.faction.name}</h1>
+        <p className="detail-description">{data.faction.description ?? "No description available."}</p>
         <ArchiveSearchNav />
 
         <div className="hero-stats detail-stats">
@@ -455,7 +533,63 @@ export function FactionDetailPageClient({ slug }: EntitySlugProps) {
             <span className="stat-label">Entity class</span>
             <strong>Faction</strong>
           </div>
+          <div className="stat-card">
+            <span className="stat-label">Associated characters</span>
+            <strong>{data.characters.length}</strong>
+          </div>
+          <div className="stat-card">
+            <span className="stat-label">Enemy factions</span>
+            <strong>{data.enemy_factions.length}</strong>
+          </div>
         </div>
+      </section>
+
+      <section className="timeline-shell entity-shell">
+        <header className="timeline-header entity-header">
+          <div>
+            <p className="section-kicker">Affiliates</p>
+            <h2>Characters aligned with {data.faction.name}</h2>
+          </div>
+          <p className="timeline-caption">
+            Derived from characters co-involved in events tagged to this faction.
+          </p>
+        </header>
+        {renderRelatedCharacters(
+          data.characters,
+          `No associated characters found for ${data.faction.name}.`,
+        )}
+      </section>
+
+      <section className="timeline-shell entity-shell">
+        <header className="timeline-header entity-header">
+          <div>
+            <p className="section-kicker">Opposition</p>
+            <h2>Enemy factions</h2>
+          </div>
+          <p className="timeline-caption">
+            Loaded from direct <code>ENEMY_OF</code> graph relationships.
+          </p>
+        </header>
+        {renderRelatedFactions(
+          data.enemy_factions,
+          `No enemy factions recorded for ${data.faction.name}.`,
+        )}
+      </section>
+
+      <section className="timeline-shell entity-shell">
+        <header className="timeline-header entity-header">
+          <div>
+            <p className="section-kicker">Chronology</p>
+            <h2>Events involving {data.faction.name}</h2>
+          </div>
+          <p className="timeline-caption">
+            Browser-fetched from <code>/api/v1/factions/by-slug/{data.faction.slug}/detail</code>.
+          </p>
+        </header>
+        {renderRelatedEvents(
+          data.involved_events,
+          `No events found involving ${data.faction.name}.`,
+        )}
       </section>
     </main>
   );

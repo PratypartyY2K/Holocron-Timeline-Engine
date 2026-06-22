@@ -127,6 +127,9 @@ class FakePlanetRepository(PlanetRepository):
 class FakeFactionRepository(FactionRepository):
     def __init__(self) -> None:
         self.factions_by_slug: dict[str, Faction] = {}
+        self.related_characters_by_slug: dict[str, list[Character]] = {}
+        self.enemy_factions_by_slug: dict[str, list[Faction]] = {}
+        self.involved_events_by_slug: dict[str, list[Event]] = {}
 
     def create(self, faction: Faction) -> Faction:
         self.factions_by_slug[faction.slug] = faction
@@ -137,6 +140,15 @@ class FakeFactionRepository(FactionRepository):
 
     def list_factions(self) -> list[Faction]:
         return sorted(self.factions_by_slug.values(), key=lambda faction: faction.name)
+
+    def list_related_characters(self, slug: str) -> list[Character]:
+        return self.related_characters_by_slug.get(slug, [])
+
+    def list_enemy_factions(self, slug: str) -> list[Faction]:
+        return self.enemy_factions_by_slug.get(slug, [])
+
+    def list_involved_events(self, slug: str) -> list[Event]:
+        return self.involved_events_by_slug.get(slug, [])
 
 
 class FakeGraphRepository(GraphRepository):

@@ -46,6 +46,13 @@ export type FactionRecord = {
   updated_at: string;
 };
 
+export type FactionDetailResponse = {
+  faction: FactionRecord;
+  characters: CharacterRecord[];
+  enemy_factions: FactionRecord[];
+  involved_events: EventRecord[];
+};
+
 export type EventListResponse = {
   items: EventRecord[];
   total: number;
@@ -417,6 +424,18 @@ export async function getFactionBySlug(slug: string): Promise<FactionRecord> {
   }
 
   return (await response.json()) as FactionRecord;
+}
+
+export async function getFactionDetailBySlug(slug: string): Promise<FactionDetailResponse> {
+  const response = await fetch(`${getApiBaseUrl()}/api/v1/factions/by-slug/${slug}/detail`, {
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch faction detail ${slug}: ${response.status}`);
+  }
+
+  return (await response.json()) as FactionDetailResponse;
 }
 
 export async function getEventDependencies(

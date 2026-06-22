@@ -1,5 +1,7 @@
 from uuid import uuid4
 
+from app.domain.entities.character import Character
+from app.domain.entities.event import Event
 from app.domain.entities.faction import Faction
 from app.domain.errors import DuplicateEntityError, EntityNotFoundError, ValidationError
 from app.engine.dto import CreateFactionCommand
@@ -37,3 +39,15 @@ class FactionService:
 
     def list_factions(self) -> list[Faction]:
         return self._faction_repository.list_factions()
+
+    def list_related_characters(self, slug: str) -> list[Character]:
+        self.get_faction_by_slug(slug)
+        return self._faction_repository.list_related_characters(slug)
+
+    def list_enemy_factions(self, slug: str) -> list[Faction]:
+        self.get_faction_by_slug(slug)
+        return self._faction_repository.list_enemy_factions(slug)
+
+    def list_involved_events(self, slug: str) -> list[Event]:
+        self.get_faction_by_slug(slug)
+        return self._faction_repository.list_involved_events(slug)
