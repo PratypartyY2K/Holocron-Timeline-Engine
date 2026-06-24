@@ -18,6 +18,24 @@ Holocron Timeline Engine is a graph-based system for modeling, exploring, and si
 - Relationship authoring API for causal links and world-state changes authored by events
 - Curated backfill pipeline for loading state-changing event history into Neo4j
 
+## Visual Tour
+
+### Landing Page
+
+![Landing page](docs/images/event-causal-graph.webp)
+
+### Event Causal Graph
+
+![Event causal graph](docs/images/landing-page.webp)
+
+### What-If Simulation
+
+![What-if simulation](docs/images/what-if-simulation.webp)
+
+### Universe State Snapshot
+
+![Universe state snapshot](docs/images/universe-state.webp)
+
 ## Engineering Highlights
 
 - Graph-based data model using Neo4j
