@@ -1,3 +1,5 @@
+import { getApiBaseUrl } from "./api-base-url";
+
 export type EventRecord = {
   id: string;
   slug: string;
@@ -149,33 +151,6 @@ export type TimelineQuery = {
 };
 
 export type BackendStatus = "ok" | "degraded" | "offline" | "unknown";
-
-const DEFAULT_BROWSER_API_BASE_URL = "http://localhost:8000";
-const DEFAULT_SERVER_API_BASE_URL = "http://backend:8000";
-
-function resolveBrowserApiBaseUrl(configuredApiBaseUrl: string | undefined): string {
-  if (!configuredApiBaseUrl) {
-    return DEFAULT_BROWSER_API_BASE_URL;
-  }
-
-  try {
-    const url = new URL(configuredApiBaseUrl);
-    if (url.hostname === "backend") {
-      url.hostname = "localhost";
-    }
-    return url.toString().replace(/\/$/, "");
-  } catch {
-    return configuredApiBaseUrl;
-  }
-}
-
-function getApiBaseUrl(): string {
-  const configuredApiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
-  if (typeof window === "undefined") {
-    return configuredApiBaseUrl ?? DEFAULT_SERVER_API_BASE_URL;
-  }
-  return resolveBrowserApiBaseUrl(configuredApiBaseUrl);
-}
 
 async function getOptionalEntityList<T>(path: string, label: string): Promise<T[]> {
   try {
@@ -412,18 +387,6 @@ export async function getPlanetBySlug(slug: string): Promise<PlanetRecord> {
 
 export async function getFactions(): Promise<FactionRecord[]> {
   return getOptionalEntityList<FactionRecord>("/api/v1/factions", "factions");
-}
-
-export async function getFactionBySlug(slug: string): Promise<FactionRecord> {
-  const response = await fetch(`${getApiBaseUrl()}/api/v1/factions/by-slug/${slug}`, {
-    cache: "no-store",
-  });
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch faction ${slug}: ${response.status}`);
-  }
-
-  return (await response.json()) as FactionRecord;
 }
 
 export async function getFactionDetailBySlug(slug: string): Promise<FactionDetailResponse> {
