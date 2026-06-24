@@ -727,22 +727,6 @@ Response:
 
 - `EventDetailResponse`
 
-### Timeline
-
-#### `GET /api/v1/timeline/events`
-
-Query params:
-
-- `start_year`
-- `end_year`
-- `limit`
-- `offset`
-- `order`
-
-Response:
-
-- `TimelinePageResponse`
-
 ### Relationships
 
 #### `POST /api/v1/graph/relationships`
