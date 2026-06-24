@@ -21,7 +21,22 @@ body {
     radial-gradient(circle at top, rgba(233, 180, 76, 0.18), transparent 30%),
     linear-gradient(180deg, #0d1825 0%, #08111c 60%, #050b12 100%);
   color: var(--text);
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--font-body), Arial, sans-serif;
+  font-weight: 400;
+}
+
+h1,
+h2,
+h3,
+.eyebrow,
+.section-kicker,
+.stat-label,
+.search-label,
+.detail-chip,
+.secondary-link,
+.action-button,
+.timeline-group-count {
+  font-family: var(--font-display), Arial, sans-serif;
 }
 
 .page-shell {
@@ -53,15 +68,18 @@ body {
 .eyebrow {
   margin: 0 0 1.4rem;
   text-transform: uppercase;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.2em;
   color: var(--accent);
-  font-size: 0.75rem;
+  font-size: 1rem;
+  line-height: 1.2;
 }
 
 .hero h1 {
   margin: 0;
-  font-size: clamp(2.5rem, 6vw, 4.8rem);
-  line-height: 0.96;
+  font-size: clamp(2.0rem, 4.5vw, 4.8rem);
+  line-height: 1.02;
+  letter-spacing: -0.045em;
+  text-transform: uppercase;
 }
 
 .lede {
@@ -188,6 +206,8 @@ body {
 .timeline-header h2 {
   margin: 0;
   font-size: clamp(1.8rem, 3vw, 3rem);
+  letter-spacing: -0.03em;
+  text-transform: uppercase;
 }
 
 .timeline-caption {
