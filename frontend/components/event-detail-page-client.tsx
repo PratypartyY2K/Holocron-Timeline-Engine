@@ -234,6 +234,9 @@ export function EventDetailPageClient({ depth, slug }: EventDetailPageClientProp
           <div>
             <p className="section-kicker">Sandbox</p>
             <h2>What-if simulation</h2>
+            <p className="sandbox-scenario">
+              What if <strong>{data.event.title}</strong> never happened?
+            </p>
           </div>
           <button
             type="button"
@@ -254,11 +257,11 @@ export function EventDetailPageClient({ depth, slug }: EventDetailPageClientProp
         <p className="timeline-caption sandbox-caption">
           {isWhatIfEnabled
             ? isSimulationLoading
-              ? "Calculating the alternate downstream timeline after removing this event."
+              ? `Calculating how the timeline changes if ${data.event.title} is removed from history.`
               : simulationError
                 ? simulationError
-                : `The alternate branch marks ${invalidatedCount} events invalidated and ${unresolvedCount} unresolved across ${simulationData?.edges.length ?? 0} causal links.`
-            : "Toggle the sandbox to simulate removing this event from the timeline and inspect the broken downstream path."}
+                : `If ${data.event.title} never happened, the alternate branch marks ${invalidatedCount} events invalidated and ${unresolvedCount} unresolved across ${simulationData?.edges.length ?? 0} causal links.`
+            : `Toggle the sandbox to explore what breaks if ${data.event.title} never occurs.`}
         </p>
 
         <EventFocusGraph
