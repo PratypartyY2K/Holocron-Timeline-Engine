@@ -153,6 +153,19 @@ The current design intentionally favors clarity and scale-out simplicity over sq
 - Neo4j was chosen over a relational database because causal traversal, dependency expansion, and path-oriented graph queries are simpler to express and reason about in a native graph model. The tradeoff is accepting a more specialized persistence stack and a smaller hiring and tooling ecosystem than a conventional SQL deployment.
 - The architecture avoids a global in-memory graph inside the FastAPI application. That reduces boot-time hydration work and removes cross-instance graph synchronization problems when the backend scales horizontally. The tradeoff is that traversal-heavy requests rely on live Neo4j reads instead of an already-materialized process-local graph.
 - The backend is effectively stateless with respect to event and relationship topology. That makes container scaling, rolling deploys, and multi-instance consistency simpler. The tradeoff is higher query cost for deep graph assembly and repeated traversal work that a shared in-memory cache might avoid.
+- Universe-state projection uses checkpoint caching so the backend does not have to replay the full mutation history on every request. The safer implementation relies on database-derived cache versioning, TTL, and bounded cache size, but it remains an in-process optimization rather than a distributed cache.
+
+## 4C. Core Runtime Flows
+
+Two runtime behaviors define the current product more than any other read path: universe-state projection and timeline-break simulation.
+
+### Universe-State Projection
+
+Events, characters, planets, and factions live in Neo4j. Some events also write state-changing relationships such as character deaths, planetary control changes, and artifact transfers. When the client requests a universe-state snapshot for an event, the backend replays those earlier mutations in chronology order and returns the projected state immediately before that event begins.
+
+### Timeline-Break Simulation
+
+For what-if simulation, the backend loads the downstream causal subgraph for a focus event, computes a topological order, marks the selected event as broken, and then walks the graph to determine which later events become invalidated or unresolved. The frontend keeps one React Flow canvas alive and swaps between canonical and simulated graph data instead of mounting separate graphs.
 
 ## 4B. Timeline Simulation Validation
 
@@ -873,7 +886,9 @@ The frontend should be designed around stable API shapes rather than Neo4j-speci
 - event metadata
 - upstream dependencies
 - downstream consequences
-- involved characters, factions, and locations
+- event-focused causal graph
+- what-if simulation output
+- universe-state snapshot with tracked characters, faction control, artifacts, and notes
 
 #### Faction Detail
 
@@ -893,6 +908,19 @@ The frontend should be designed around stable API shapes rather than Neo4j-speci
 - prefer normalized IDs and stable enums
 - avoid leaking raw Cypher or Neo4j shapes
 - keep graph payloads generic enough for React Flow adapters
+
+### Primary Product Flow
+
+The clearest end-to-end interaction is the event detail page:
+
+1. Open `/events`.
+2. Select `Battle of Yavin`.
+3. Load the event-focused causal graph.
+4. Toggle `What If?`.
+5. Inspect downstream events shifting to `broken`, `invalidated`, or `unresolved`.
+6. Review the projected universe-state snapshot shown before the event starts.
+
+That flow is the reason the system exists. Most engine complexity is there to make propagation and state reconstruction correct and explainable.
 
 ## 16. Testing Strategy
 
@@ -1127,6 +1155,17 @@ Mitigation:
 - enforce bounded depth
 - add indexes and targeted traversal patterns
 - revisit query strategy after sample data benchmarking
+
+### Risk: Traversal and Projection Costs Grow With Dataset Size
+
+Mitigation:
+
+- cap public traversal depth at `1..8` to avoid unbounded Cypher expansion
+- enforce Neo4j read query timeouts
+- keep causal graph payloads bounded for interactive views
+- add tighter result limits and query tuning before broadening graph depth defaults
+- precompute summaries for hot views if demand shifts toward repeated high-fanout reads
+- move universe-state caching to a distributed layer if in-process caching stops being sufficient
 
 ## 23. Approved MVP Decisions
 
