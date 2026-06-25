@@ -2,13 +2,13 @@
 
 ## Overview
 
-Holocron Timeline Engine is a graph-based system for modeling and simulating causal timelines.
+Holocron Timeline Engine stores events and related entities in Neo4j, then uses that graph for traversal-heavy reads and mutation replay.
 
-- `frontend/` is a Next.js UI for search, timeline browsing, graph exploration, and what-if simulation
+- `frontend/` is a Next.js UI for search, timeline browsing, graph views, and break simulation
 - `backend/app/api/` exposes FastAPI routes under `/api/v1`
-- `backend/app/engine/` contains business logic for traversal, simulation, relationships, and universe-state projection
-- `backend/app/repositories/neo4j/` translates engine operations into Cypher
-- Neo4j is the persistent graph store and source of truth
+- `backend/app/engine/` contains traversal, simulation, relationship validation, and universe-state replay
+- `backend/app/repositories/neo4j/` translates service calls into Cypher
+- Neo4j is the source of truth
 
 Request flow:
 
@@ -18,17 +18,17 @@ Request flow:
 
 ![Production request and ingestion lifecycle](./production-request-ingestion-lifecycle.svg)
 
-The production architecture separates two concerns:
+The codebase keeps two paths separate:
 
-- stateless request serving from Next.js through FastAPI into request-scoped Neo4j reads
-- isolated ingestion and backfill pipelines that validate writes before committing into the same graph store
+- stateless reads from the UI through FastAPI into request-scoped Neo4j queries
+- ingestion and backfill jobs that validate writes before committing them to the same graph
 
 ### Runtime Layers
 
-- `frontend/` issues browser-side REST fetches and renders timeline, graph, and simulation views
-- `backend/app/api/` and `backend/app/engine/` remain stateless with respect to graph topology and assemble subgraphs per request
+- `frontend/` issues browser-side REST calls and renders timeline, graph, and simulation views
+- `backend/app/api/` and `backend/app/engine/` stay stateless with respect to graph topology and assemble subgraphs per request
 - `backend/app/repositories/neo4j/` translates read and write operations into Cypher against Neo4j
-- `scripts/`, `backend/app/ingestion/`, and backfill CLIs handle dataset compilation, audits, and idempotent write workflows outside the request path
+- `scripts/`, `backend/app/ingestion/`, and backfill CLIs handle dataset compilation, audits, and idempotent writes outside the request path
 
 ## Core Model
 
@@ -44,7 +44,7 @@ The production architecture separates two concerns:
 - Structural: `CAUSES`, `INVOLVES`, `LOCATED_IN`, `MEMBER_OF`, `ALLIED_WITH`, `ENEMY_OF`
 - State-changing: `SETS_ALIVE_STATE`, `SETS_CHARACTER_LOCATION`, `SETS_PLANET_CONTROL`, `SETS_ARTIFACT_LOCATION`
 
-The structural edges describe chronology and archive semantics. The `SETS_*` edges let events modify world state over time.
+The structural edges describe chronology and archive relationships. The `SETS_*` edges carry state changes authored by events.
 
 ## System Mechanics
 
@@ -56,7 +56,7 @@ Chronology is stored as signed integers:
 - `4 ABY` -> `4`
 - `0 ABY` -> `0`
 
-This keeps filtering, sorting, traversal, and mutation replay on one numeric axis.
+This keeps filtering, sorting, traversal, and replay on one numeric axis.
 
 ### Zero-Boundary Behavior
 
@@ -64,13 +64,13 @@ Cross-boundary events are stored as normal intervals:
 
 - `1 BBY -> 1 ABY` becomes `start_year = -1`, `end_year = 1`
 
-Display chronology has no historical year zero, but the engine deliberately keeps a mathematical `0` internally so:
+Display chronology has no historical year zero, but the backend keeps a mathematical `0` internally so:
 
 - interval math stays continuous
 - comparisons and indexing do not need boundary-specific rules
 - replay and offset calculations do not need BBY/ABY special cases
 
-`0` is an internal scalar convenience, not a canonical calendar claim.
+`0` exists to make the math work. It is not a lore claim.
 
 ## Data Model Diagram
 
@@ -102,12 +102,12 @@ Display chronology has no historical year zero, but the engine deliberately keep
 
 ### Processing
 
-The engine:
+The service:
 
 1. marks the selected event as `broken`
 2. computes a topological order over the downstream subgraph
 3. evaluates each event from its dependency status
-4. marks nodes as `invalidated` or `unresolved` when support collapses or becomes partial
+4. marks nodes as `invalidated` or `unresolved` based on which upstream dependencies still survive
 
 ### Output
 
@@ -117,11 +117,11 @@ The response returns:
 - causal edges
 - topological order
 
-The frontend renders canonical and simulated states in one React Flow canvas and reruns layout over the active dataset instead of mounting separate graphs.
+The frontend renders both the stored graph and the simulated graph in one React Flow canvas and reruns layout over whichever dataset is active.
 
 ## Scaling Characteristics
 
-The backend does not maintain a global in-memory graph cache.
+The backend does not keep a shared in-memory graph.
 
 - Neo4j is the source of truth
 - FastAPI instances are stateless with respect to graph topology
@@ -130,32 +130,32 @@ The backend does not maintain a global in-memory graph cache.
 
 ### Why This Helps
 
-- horizontal scaling is simpler
-- cross-instance graph synchronization is not required
-- writes become visible through subsequent Neo4j reads
+- there is no cross-instance graph cache to invalidate
+- adding app instances is straightforward
+- writes are visible on the next read from Neo4j
 
 ### Main Bottlenecks
 
-- deep traversal cost in Neo4j
-- larger payloads for graph and simulation endpoints
-- Python post-processing on returned subgraphs
-- frontend rendering cost for dense node and edge sets
+- deep Neo4j traversals
+- large graph and simulation payloads
+- Python post-processing over returned subgraphs
+- frontend rendering once node and edge counts climb
 
 ### Likely Upgrade Paths
 
-- tighter depth and result-size limits
+- tighter depth and payload limits
 - more aggressive Cypher tuning and indexing
 - precomputed summaries for hot graph views
 - Neo4j Graph Data Science for heavier analysis
-- Redis or pub/sub only if shared in-memory graph materializations are introduced later
+- Redis or pub/sub only if we later introduce shared in-memory graph materialization
 
 ## Mutation and Universe State
 
-Events can modify world state without storing snapshots directly on nodes.
+Events change world state through mutation edges. We do not store full snapshots on graph nodes.
 
 ### Mutation Rules
 
-`RelationshipService` validates writes before Neo4j persistence:
+`RelationshipService` validates writes before persisting them:
 
 - endpoints must exist
 - unsupported source/target combinations are rejected
@@ -167,7 +167,7 @@ Events can modify world state without storing snapshots directly on nodes.
 
 ### Universe-State Reconstruction
 
-`UniverseStateService` reconstructs the world before a focus event by combining:
+`UniverseStateService` reconstructs the world before a focus event from:
 
 - curated baseline state
 - prior events
@@ -181,16 +181,16 @@ It replays mutations in chronology order to derive:
 
 ### Checkpoints
 
-Universe-state reads use checkpoint snapshots at era boundaries so repeated requests replay only the remaining mutation delta.
+Universe-state reads use checkpoints at era boundaries so repeated requests replay only the remaining delta.
 
 Tradeoff:
 
-- warm reads get faster
-- cached snapshots are still held in-process for speed
-- cache reuse is gated by a database-derived version token, so instances rebuild when persisted graph state changes
-- entries are bounded by TTL and cache-size limits to avoid unbounded process memory growth
+- warm reads are faster
+- snapshots stay in-process because rebuilding them every time is wasteful
+- cache reuse is gated by a database-derived version token, so instances rebuild after graph writes
+- TTL and entry-count caps keep process memory bounded
 
-This is a safer intermediate step than relying on local invalidation alone, but a dedicated distributed cache such as Redis would still be the next step if universe-state reads become hot across many application instances.
+This is a middle ground: faster than replaying from scratch, simpler than introducing Redis just for this path.
 
 ### Backfill
 
@@ -198,9 +198,9 @@ Curated state history is loaded through `TemporalMutationBackfillService`, which
 
 ## Repository and Data Flow
 
-- `Neo4jEventRepository` handles event listing, traversal, causal graph assembly, impact analysis, and break-simulation graph queries
+- `Neo4jEventRepository` handles event listing, traversal, causal graph assembly, impact analysis, and break-simulation queries
 - `Neo4jGraphRepository` stores relationships, validates references, runs search, and lists prior state mutations
-- character, planet, and faction repositories support entity lookup and creation
+- character, planet, and faction repositories handle lookup and creation
 
 Data import stays outside the HTTP layer:
 

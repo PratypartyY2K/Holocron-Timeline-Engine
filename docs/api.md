@@ -14,8 +14,8 @@ Companion docs:
 ## Conventions
 
 - All routes are mounted under `/api/v1`.
-- The source of truth for exact request and response schemas is the FastAPI OpenAPI document exposed at `/docs`.
-- Traversal-heavy endpoints cap public depth arguments at `8`.
+- Exact request and response schemas live in the OpenAPI document at `/docs`.
+- Traversal-heavy endpoints cap public depth at `8`.
 - Event dependency and consequence list endpoints interpret `depth` as an exact hop distance.
 
 ## Endpoint Groups
@@ -74,13 +74,13 @@ Companion docs:
 
 #### `GET /health`
 
-Returns a simple backend status payload.
+Returns a simple status payload.
 
 ### Search
 
 #### `GET /search`
 
-Searches across events, characters, planets, and factions.
+Searches events, characters, planets, and factions.
 
 Query params:
 
@@ -95,7 +95,7 @@ Creates an event.
 
 #### `GET /events`
 
-Lists events for timeline browsing and filtered archive views.
+Lists events for the timeline page and filtered archive views.
 
 Query params:
 
@@ -119,7 +119,7 @@ Fetches a single event by slug for frontend routing.
 
 #### `GET /events/{event_id}/dependencies`
 
-Returns upstream causal dependencies for an event.
+Returns upstream events at the requested hop distance.
 
 Query params:
 
@@ -127,7 +127,7 @@ Query params:
 
 #### `GET /events/{event_id}/consequences`
 
-Returns downstream causal consequences for an event.
+Returns downstream events at the requested hop distance.
 
 Query params:
 
@@ -135,7 +135,7 @@ Query params:
 
 #### `GET /events/{event_id}/causal-graph`
 
-Returns an event-focused causal graph.
+Returns the focus event plus the connected causal subgraph within the requested depth.
 
 Query params:
 
@@ -143,17 +143,17 @@ Query params:
 
 #### `GET /events/{event_id}/impact`
 
-Returns impacted downstream events and broken edges for an event.
+Returns downstream events affected by removing this event, plus the broken edges.
 
 #### `GET /events/{event_id}/universe-state`
 
-Returns the projected universe state immediately before the selected event.
+Replays prior mutations and returns the world state immediately before the selected event.
 
 ### Engine
 
 #### `GET /engine/simulate-break/{event_id}`
 
-Runs the break-simulation engine for an event and returns an alternate branch graph with per-node statuses such as `broken`, `invalidated`, and `unresolved`.
+Removes one event, walks the downstream branch, and returns per-node statuses like `broken`, `invalidated`, and `unresolved`.
 
 ### Characters
 
@@ -171,7 +171,7 @@ Fetches a character by slug.
 
 #### `GET /characters/{character_id}/timeline`
 
-Returns a filtered event timeline for a character.
+Returns events linked to the character, with the same timeline filters used on `/events`.
 
 Query params:
 
@@ -214,7 +214,7 @@ Fetches a faction by slug.
 
 #### `GET /factions/by-slug/{slug}/detail`
 
-Fetches the aggregate faction detail payload used by the faction detail page.
+Returns the aggregate payload used by the faction detail page.
 
 Response includes:
 
@@ -227,7 +227,7 @@ Response includes:
 
 #### `POST /graph/relationships`
 
-Creates a graph relationship or temporal mutation.
+Creates a graph relationship or a temporal mutation.
 
 Used for:
 
@@ -254,4 +254,4 @@ Validation before commit:
 - rejects duplicate relationships
 - rejects `CAUSES` edges that would introduce a cycle
 - rejects `CAUSES` edges that violate chronology ordering
-- canonicalizes symmetric relationships such as `ALLIED_WITH` and `ENEMY_OF`
+- canonicalizes symmetric relationships such as `ALLIED_WITH` and `ENEMY_OF` so duplicate checks are stable

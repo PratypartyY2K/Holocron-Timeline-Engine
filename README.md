@@ -1,122 +1,75 @@
 # Holocron Timeline Engine
 
-Holocron Timeline Engine is a graph-based system for modeling, exploring, and simulating causal timelines in fictional universes. Built with a Next.js frontend, a FastAPI backend, and Neo4j for graph storage, it helps users trace event dependencies, visualize causal relationships, simulate alternate timelines, and observe how changes propagate through a connected system.
+I built this as a causal timeline system for a fictional universe, using Star Wars data as the working dataset. The core idea is simple: events are nodes, causal links are edges, and the backend can answer questions like "what had to happen before this?" or "what breaks if this event never happens?"
 
-## What It Is
+The stack is Next.js on the frontend, FastAPI in the backend, and Neo4j as the graph store. The frontend is mostly a thin client over the API. The backend owns chronology normalization, traversal rules, relationship validation, break simulation, and world-state reconstruction.
 
-- Graph-based timeline modeling system for causally linked events
-- Interactive archive for events, characters, planets, and factions
-- Alternate-timeline simulator for testing "what if" breaks in event chains
-- State-replay system that reconstructs the world before a selected event by applying prior changes such as character deaths, planet control shifts, and artifact movement
+## What it does
 
-## Key Features
+- Lists events on a timeline with filters for era, character, location, and date range
+- Traverses upstream dependencies and downstream consequences through `CAUSES` edges
+- Renders event-focused causal graphs
+- Runs a what-if simulation by breaking one event and propagating the effect through the downstream graph
+- Reconstructs world state before a selected event by replaying prior state-changing relationships
 
-- Chronology-aware event timeline with filters for era, character, location, order, and date range
-- Slug-based detail pages for events, characters, planets, and factions
-- Causal graph views for event dependencies, consequences, and alternate simulated branches
-- Search across events, characters, planets, and factions
-- Relationship authoring API for causal links and world-state changes authored by events
-- Curated backfill pipeline for loading state-changing event history into Neo4j
+## How it works
 
-## Visual Tour
+Events, characters, planets, and factions live in Neo4j. Events can also write state-changing edges such as "this event kills a character" or "this event changes who controls a planet." When you request a universe-state snapshot, the backend replays those earlier mutations in chronology order and returns the projected state for that point in time.
 
-### Landing Page
+For simulation, the backend loads the downstream causal subgraph for a focus event, computes a topological order, marks the selected event as broken, and then walks the graph to decide which later events become invalidated or unresolved. The frontend keeps one React Flow canvas alive and swaps between canonical and simulated data instead of mounting separate graphs.
 
-![Landing page](docs/images/event-causal-graph.webp)
+## Tradeoffs
 
-### Event Causal Graph
+I chose Neo4j over a relational model because the main read paths are graph traversals, not joins over tabular records. That made dependency expansion, consequence traversal, and path-oriented queries much simpler to express, but it also means the project depends on a more specialized database.
 
-![Event causal graph](docs/images/landing-page.webp)
+I kept the FastAPI layer effectively stateless with respect to the graph. I did not build a global in-memory graph cache because that complicates horizontal scaling and cache invalidation. The tradeoff is that deep traversals and graph assembly happen live against Neo4j, so some endpoints are more expensive than a precomputed design would be.
 
-### What-If Simulation
+For universe-state projection, I added checkpoint caching to avoid replaying the full mutation history on every request. The safer version now uses database-derived cache versioning plus TTL and bounded cache size, but it is still an in-process optimization, not a full distributed cache.
 
-![What-if simulation](docs/images/what-if-simulation.webp)
+## Limits and scaling constraints
 
-### Universe State Snapshot
+This project is fine at small-to-medium graph sizes, but the expensive paths are clear:
 
-![Universe state snapshot](docs/images/universe-state.webp)
+- deep dependency and consequence traversals
+- large causal graph payloads
+- what-if simulations over large downstream branches
+- universe-state projection when the mutation catalog grows
 
-## Engineering Highlights
+Public traversal depth is capped at `1..8` to avoid unbounded Cypher expansion. Neo4j reads also run with a query timeout. If this had to scale much further, the next steps would be tighter result limits, more query tuning, precomputed summaries for hot views, and probably a real distributed cache for universe-state reads.
 
-- Graph-based data model using Neo4j
-- Causal dependency traversal implemented with Cypher queries
-- Topological propagation for timeline break simulation
-- Separation of engine logic from the API layer
-- Typed API layer built with FastAPI and Pydantic
+## Example flow
 
-## Performance Notes
+The clearest example is the event detail page:
 
-- Deep dependency and consequence traversals become more expensive as the graph grows, because the backend assembles request-scoped subgraphs directly from Neo4j.
-- Causal graph and simulation endpoints can produce larger payloads than simple entity lookups, especially when traversal depth or downstream fan-out increases.
-- Timeline-break simulation cost grows with the size of the downstream subgraph, since the engine performs topological propagation over the affected branch rather than a constant-time lookup.
+1. Open `/events`
+2. Select `Battle of Yavin`
+3. Load its causal graph
+4. Toggle `What If?`
+5. Watch downstream events shift to `broken`, `invalidated`, or `unresolved`
 
-For deeper performance and scaling discussion, see [docs/architecture.md](docs/architecture.md).
+That flow is the reason the project exists. Most of the system is there to make that propagation behavior correct and explainable.
 
-## Demo Routes
+## Project structure
 
-- `/` landing page with archive search and section navigation
-- `/events` main timeline explorer and search results view
-- `/events/[slug]` event detail page with causal graph, impact, what-if simulation, and universe state
-- `/characters` character index
-- `/characters/[slug]` character detail page
-- `/planets` planet index
-- `/planets/[slug]` planet detail page
-- `/factions` faction index
-- `/factions/[slug]` faction detail page with related characters, enemy factions, and involved events
-
-Examples:
-
-- `http://localhost:3000/`
-- `http://localhost:3000/events`
-- `http://localhost:3000/events/battle-of-yavin?depth=2`
-- `http://localhost:3000/characters/luke-skywalker`
-
-## Example Use Case
-
-1. Open `/`.
-2. Use the `Events` launcher or go directly to `/events`.
-3. Select `Battle of Yavin`.
-4. View its causal graph.
-5. Toggle `What If?`.
-6. Observe downstream events become invalidated or unresolved.
-
-This demonstrates how causal relationships propagate through the system when a key event is broken.
-
-## Architecture
-
-At a high level:
-
-- `frontend/` contains the Next.js app and graph/timeline UI
-- `backend/app/api/` exposes the FastAPI HTTP routes
-- `backend/app/engine/` contains business logic for events, simulation, search, relationships, and universe state
-- `backend/app/repositories/neo4j/` translates engine operations into Cypher queries
-- `backend/app/domain/` defines the core entities and enums
-- `backend/app/ingestion/` and `scripts/` support dataset transformation and import workflows
+- `frontend/` contains the Next.js UI
+- `backend/app/api/` contains FastAPI routes
+- `backend/app/engine/` contains the actual application logic
+- `backend/app/repositories/neo4j/` contains Cypher-backed persistence code
+- `docs/architecture.md` explains system mechanics and scaling behavior
+- `docs/api.md` documents the API surface
 
 Request flow:
 
-`Next.js UI -> FastAPI routes -> engine services -> repository interfaces -> Neo4j`
+`Next.js UI -> FastAPI routes -> engine services -> Neo4j repositories -> Neo4j`
 
-Production request and ingestion lifecycle:
+## Screens
 
-![Production request and ingestion lifecycle](docs/production-request-ingestion-lifecycle.svg)
+![Landing page](docs/images/event-causal-graph.webp)
+![Event causal graph](docs/images/landing-page.webp)
+![What-if simulation](docs/images/what-if-simulation.webp)
+![Universe state snapshot](docs/images/universe-state.webp)
 
-## Docs
-
-- [Architecture](docs/architecture.md)
-- [API](docs/api.md)
-- [Engineering Design](docs/engineering-design.md)
-
-### Documentation
-
-- Architecture diagrams: production request and ingestion lifecycle view in [docs/architecture.md](docs/architecture.md)
-- Data model overview and relationship model in [docs/architecture.md](docs/architecture.md)
-- System mechanics such as chronology normalization in [docs/architecture.md](docs/architecture.md)
-- Example API and graph queries in [docs/api.md](docs/api.md) and [docs/architecture.md](docs/architecture.md)
-
-## Local Development
-
-Run the full stack with Docker Compose:
+## Run it locally
 
 ```bash
 docker compose -f docker/compose.yml up --build
@@ -129,16 +82,16 @@ Local endpoints:
 - OpenAPI docs: `http://localhost:8000/docs`
 - Neo4j Browser: `http://localhost:7474`
 
-## Data Pipeline
+## Data and tests
 
-Transform and ingest archive data:
+Transform and ingest data:
 
 ```bash
 uv run python scripts/transform.py
 uv run python scripts/ingest.py
 ```
 
-Backfill curated temporal mutations through backend validation:
+Backfill curated state-changing event history:
 
 ```bash
 cd backend
@@ -146,7 +99,7 @@ python -m app.scripts.backfill_temporal_mutations --dry-run
 python -m app.scripts.backfill_temporal_mutations
 ```
 
-## Testing
+Run tests:
 
 ```bash
 cd backend
@@ -160,4 +113,8 @@ cd backend
 pytest tests/unit/engine/test_chaos_simulation.py
 ```
 
-`tests/unit/engine/test_chaos_simulation.py` builds a deterministic 500-event mock tree, breaks events sampled across multiple topological ranks, and verifies that `TimelineSimulationService` produces stable downstream `BROKEN`, `INVALIDATED`, and `UNRESOLVED` states without unhandled execution errors.
+## Further reading
+
+- [docs/architecture.md](docs/architecture.md)
+- [docs/api.md](docs/api.md)
+- [docs/engineering-design.md](docs/engineering-design.md)
