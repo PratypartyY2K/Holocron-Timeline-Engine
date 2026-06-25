@@ -86,19 +86,19 @@ class UniverseStateService:
             cls._projection_cache_by_version.clear()
 
     def get_state_before_event(self, event_id: str) -> UniverseState:
-        projection_cache = self._get_or_build_projection_cache()
-        focus_event = projection_cache.events_by_id.get(event_id)
+        cache = self._get_or_build_projection_cache()
+        focus_event = cache.events_by_id.get(event_id)
         if focus_event is None:
             raise EntityNotFoundError(f"Event not found: {event_id}")
 
-        projection_state = self._state_before_event(projection_cache, focus_event)
+        projection_state = self._replay_state_before_event(cache, focus_event)
 
         return UniverseState(
             event_id=focus_event.id,
             event_slug=focus_event.slug,
             event_title=focus_event.title,
             as_of_year=focus_event.start_year,
-            prior_event_count=self._count_prior_events(projection_cache.sorted_events, focus_event),
+            prior_event_count=self._count_prior_events(cache.sorted_events, focus_event),
             projection_mode="graph-event-projection",
             notes=list(PROJECTION_NOTES),
             characters=sorted(projection_state.characters.values(), key=lambda item: item.name),
@@ -157,13 +157,13 @@ class UniverseStateService:
         planets_by_slug, planets_by_id = self._load_planet_maps()
         factions_by_slug, factions_by_id = self._load_faction_maps()
         tracked_characters, characters_by_id = self._load_character_maps()
-        base_state = self._build_base_state(
+        base_state = self._seed_base_state(
             tracked_characters=tracked_characters,
             planets_by_slug=planets_by_slug,
             factions_by_slug=factions_by_slug,
         )
         mutations_by_event_id = self._load_mutations_by_event_id(sorted_events)
-        checkpoints = self._build_checkpoints(
+        checkpoints = self._capture_checkpoints(
             sorted_events=sorted_events,
             base_state=base_state,
             mutations_by_event_id=mutations_by_event_id,
@@ -235,7 +235,7 @@ class UniverseStateService:
             mutations_by_event_id.setdefault(mutation.from_node_id, []).append(mutation)
         return mutations_by_event_id
 
-    def _build_checkpoints(
+    def _capture_checkpoints(
         self,
         *,
         sorted_events: list[Event],
@@ -257,10 +257,12 @@ class UniverseStateService:
             )
             next_event = sorted_events[index + 1] if index + 1 < len(sorted_events) else None
             if next_event is None or next_event.era != event.era:
+                # Era boundaries give us a cheap checkpoint cadence without storing a snapshot
+                # after every event.
                 checkpoints.append((self._sort_key(event), event.id, deepcopy(state_after_event)))
         return checkpoints
 
-    def _state_before_event(self, cache: _ProjectionCache, focus_event: Event) -> _ProjectionState:
+    def _replay_state_before_event(self, cache: _ProjectionCache, focus_event: Event) -> _ProjectionState:
         focus_key = self._sort_key(focus_event)
         prior_checkpoint_event_id: str | None = None
         state = deepcopy(cache.base_state)
@@ -273,6 +275,8 @@ class UniverseStateService:
 
         start_replay = prior_checkpoint_event_id is None
         for event in cache.sorted_events:
+            # Checkpoints store the state after the checkpoint event, so replay resumes on the
+            # following event.
             if not start_replay:
                 if event.id == prior_checkpoint_event_id:
                     start_replay = True
@@ -296,7 +300,7 @@ class UniverseStateService:
         )
 
     @staticmethod
-    def _build_base_state(
+    def _seed_base_state(
         *,
         tracked_characters: Mapping[str, Character],
         planets_by_slug: Mapping[str, Planet],

@@ -21,20 +21,21 @@ class TimelineSimulationService:
             raise EntityNotFoundError(f"Event not found: {event_id}")
 
         graph = self._event_repository.get_break_simulation_graph(event_id)
-        return self._build_simulation(broken_event=broken_event, graph=graph)
+        return self._assemble_simulation_result(broken_event=broken_event, graph=graph)
 
-    def _build_simulation(
+    def _assemble_simulation_result(
         self,
         *,
         broken_event: Event,
         graph: TimelineBreakSimulationGraph,
     ) -> TimelineBreakSimulation:
-        nodes_by_id = self._build_nodes_by_id(broken_event, graph)
-        topological_order = self._build_topological_order(nodes_by_id, graph)
-        simulation_nodes = self._build_simulation_nodes(
+        events_by_id = {broken_event.id: broken_event}
+        events_by_id.update({event.id: event for event in graph.downstream_events})
+        topological_order = self._order_events_for_simulation(events_by_id, graph)
+        simulation_nodes = self._derive_node_states(
             broken_event=broken_event,
             graph=graph,
-            nodes_by_id=nodes_by_id,
+            events_by_id=events_by_id,
             topological_order=topological_order,
         )
         simulation_nodes.sort(key=self._simulation_sort_key)
@@ -46,19 +47,11 @@ class TimelineSimulationService:
         )
 
     @staticmethod
-    def _build_nodes_by_id(
-        broken_event: Event, graph: TimelineBreakSimulationGraph
-    ) -> dict[str, Event]:
-        nodes_by_id = {broken_event.id: broken_event}
-        nodes_by_id.update({event.id: event for event in graph.downstream_events})
-        return nodes_by_id
-
-    @staticmethod
-    def _build_topological_order(
-        nodes_by_id: dict[str, Event], graph: TimelineBreakSimulationGraph
+    def _order_events_for_simulation(
+        events_by_id: dict[str, Event], graph: TimelineBreakSimulationGraph
     ) -> list[str]:
-        adjacency: dict[str, list[str]] = {event_id: [] for event_id in nodes_by_id}
-        indegree: dict[str, int] = {event_id: 0 for event_id in nodes_by_id}
+        adjacency: dict[str, list[str]] = {event_id: [] for event_id in events_by_id}
+        indegree: dict[str, int] = {event_id: 0 for event_id in events_by_id}
         for edge in graph.internal_edges:
             adjacency.setdefault(edge.source_id, []).append(edge.target_id)
             indegree[edge.target_id] = indegree.get(edge.target_id, 0) + 1
@@ -73,19 +66,21 @@ class TimelineSimulationService:
                 if indegree[target_id] == 0:
                     queue.append(target_id)
 
-        if len(topological_order) != len(nodes_by_id):
+        if len(topological_order) != len(events_by_id):
+            # The graph should be acyclic, but the response still needs to be deterministic
+            # if bad data slips through.
             remaining_ids = sorted(
-                event_id for event_id in nodes_by_id if event_id not in topological_order
+                event_id for event_id in events_by_id if event_id not in topological_order
             )
             topological_order.extend(remaining_ids)
         return topological_order
 
-    def _build_simulation_nodes(
+    def _derive_node_states(
         self,
         *,
         broken_event: Event,
         graph: TimelineBreakSimulationGraph,
-        nodes_by_id: dict[str, Event],
+        events_by_id: dict[str, Event],
         topological_order: list[str],
     ) -> list[TimelineBreakSimulationNode]:
         statuses: dict[str, TimelineNodeStatus] = {broken_event.id: TimelineNodeStatus.BROKEN}
@@ -102,8 +97,8 @@ class TimelineSimulationService:
             if current_id == broken_event.id:
                 continue
             simulation_nodes.append(
-                self._build_simulation_node(
-                    event=nodes_by_id[current_id],
+                self._classify_event_state(
+                    event=events_by_id[current_id],
                     dependency_ids=graph.dependency_ids_by_event_id.get(current_id, []),
                     statuses=statuses,
                     rank=rank,
@@ -112,7 +107,7 @@ class TimelineSimulationService:
         return simulation_nodes
 
     @staticmethod
-    def _build_simulation_node(
+    def _classify_event_state(
         *,
         event: Event,
         dependency_ids: list[str],
@@ -136,6 +131,7 @@ class TimelineSimulationService:
             if dependency_id not in statuses
             or statuses.get(dependency_id) is TimelineNodeStatus.ACTIVE
         )
+        # If anything upstream still survives, the event is unresolved rather than invalidated.
         status = (
             TimelineNodeStatus.UNRESOLVED
             if surviving_dependency_ids or unresolved_dependency_ids

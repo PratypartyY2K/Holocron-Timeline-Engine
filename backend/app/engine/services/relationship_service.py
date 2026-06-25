@@ -69,9 +69,11 @@ class RelationshipService:
         if command.type is RelationshipType.CAUSES:
             self._validate_causes_relationship(source_id=source_id, target_id=target_id)
         else:
-            self._validate_stateful_relationship(command=command)
+            self._validate_temporal_mutation(command=command)
 
         if command.type in CANONICAL_EDGE_TYPES and target_id < source_id:
+            # These relationships are logically undirected, so we normalize storage to keep
+            # duplicate detection predictable.
             source_id, target_id = target_id, source_id
 
         existing_relationship = self._graph_repository.get_relationship(
@@ -123,23 +125,29 @@ class RelationshipService:
                 f"source event starts after target event ({source_start_year} > {target_start_year})"
             )
 
-    def _validate_stateful_relationship(self, command: CreateRelationshipCommand) -> None:
+    def _validate_temporal_mutation(self, command: CreateRelationshipCommand) -> None:
         if command.type is RelationshipType.SETS_ALIVE_STATE and command.value_bool is None:
             raise ValidationError("SETS_ALIVE_STATE requires value_bool")
 
         if command.type is RelationshipType.SETS_CHARACTER_LOCATION:
-            self._require_subject(command.subject_node_id, "SETS_CHARACTER_LOCATION requires subject_node_id")
+            self._require_subject_node(
+                command.subject_node_id,
+                "SETS_CHARACTER_LOCATION requires subject_node_id",
+            )
             self._validate_subject_type(command.subject_node_id, NodeType.CHARACTER)
 
         if command.type is RelationshipType.SETS_PLANET_CONTROL:
-            self._require_subject(command.subject_node_id, "SETS_PLANET_CONTROL requires subject_node_id")
+            self._require_subject_node(
+                command.subject_node_id,
+                "SETS_PLANET_CONTROL requires subject_node_id",
+            )
             self._validate_subject_type(command.subject_node_id, NodeType.PLANET)
 
         if command.type is RelationshipType.SETS_ARTIFACT_LOCATION:
             if command.artifact_key is None or not command.artifact_key.strip():
                 raise ValidationError("SETS_ARTIFACT_LOCATION requires artifact_key")
 
-    def _require_subject(self, subject_node_id: str | None, message: str) -> None:
+    def _require_subject_node(self, subject_node_id: str | None, message: str) -> None:
         if subject_node_id is None or not subject_node_id.strip():
             raise ValidationError(message)
 
